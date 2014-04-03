@@ -1,0 +1,48 @@
+aag 10 2 3 1 5
+2
+4
+6 1
+8 13
+10 20
+16
+12 8 6
+14 10 6
+16 14 12
+18 15 13
+20 19 17
+i0 stay
+i1 controllable_reset
+l0 n7
+l1 counter<0>_out
+l2 counter<1>_out
+o0 err
+c
+bench
+This file was written by ABC on Thu May 23 15:48:35 2013
+For information about AIGER format, refer to http://fmv.jku.at/aiger
+-------------------------------
+This AIGER file has been created by the following sequence of commands:
+> vl2mv cnt2_u.v   ---gives--> cnt2_u.mv
+> abc -c "read_blif_mv cnt2_u.mv; strash; refactor; rewrite; dfraig; rewrite; dfraig; write_aiger -s cnt2_u_o.aig"   ---gives--> cnt2_u_o.aig
+> aigtoaig cnt2_u_o.aig cnt2_u_o.aag   ---gives--> cnt2_u_o.aag (this file)
+Content of cnt2_u.v:
+// unrealizable
+module bench(clk, stay, controllable_reset, err);
+  input clk;
+  input stay;
+  input controllable_reset;
+  output err;
+  reg [1:0] counter;
+
+  assign err = (counter == 2'b11) ? 1 : 0;
+  
+  initial
+  begin
+    counter = 2'b0;
+  end
+  always @ (posedge clk)
+  begin
+    counter = counter + 1;
+  end
+endmodule
+-------------------------------
