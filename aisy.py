@@ -133,7 +133,7 @@ def get_lit_type(stripped_lit):
 def get_bdd_for_value(lit):  # lit is variable index with sign
     stripped_lit = strip_lit(lit)
 
-    # we faked error latch and cannot call directly aiger_is_input, aiger_is_latch, aiger_is_and
+    # we faked error latch and so we cannot call directly aiger_is_input, aiger_is_latch, aiger_is_and
     input_, latch_, and_ = get_lit_type(stripped_lit)
 
     if stripped_lit == 0:
@@ -410,47 +410,11 @@ def compose_init_state_bdd():
     return init_state_bdd
 
 
-# def succ_bdd(src_states, transition_bdd):
-#     """
-#     `` {s' | ∃s,i,o: src_states & T(s,i,o,s') } ``
-#
-#     :return:
-#     """
-#
-#     signals_bdds = get_uncontrollable_output_bdds() + get_controllable_vars_bdds()
-#     latches_bdds = get_all_latches_as_bdds()
-#
-#     quantified_vars_cube = get_cube(signals_bdds + latches_bdds)
-#
-#     successor_states_bdd = (src_states & transition_bdd).ExistAbstract(quantified_vars_cube)
-#
-#     new_states_bdd = unprime_latches_in_bdd(successor_states_bdd)
-#
-#     return new_states_bdd
-
-
-# def calc_reachable_set(strategy, init_state_bdd, transition_bdd):
-#     #: :type: DdNode
-#     reachable = init_state_bdd & strategy
-#
-#     while True:
-#         prev_reachable = reachable
-#
-#         new_states = strategy & succ_bdd(reachable, transition_bdd)
-#         reachable = reachable | new_states
-#
-#         if reachable == prev_reachable:
-#             break
-#
-#     return reachable
-
-
 def extract_output_funcs(strategy, init_state_bdd, transition_bdd):
     """ Calculate BDDs for output functions given non-deterministic winning strategy.
 
     :param strategy: non-deterministic winning strategy
     :return: dictionary ``controllable_variable_bdd -> func_bdd``
-    :hint: to calculate Cofactors in cudd: ``bdd.Cofactor(var_as_bdd)`` or ``bdd.Cofactor(~var_as_bdd)``
     :hint: to calculate Restrict in cudd: ``func.Restrict(care_set)``
            (on care_set: ``func.Restrict(care_set) <-> func``)
     """
@@ -598,16 +562,13 @@ def walk(a_bdd):
     Literal representing given input BDD is `not` added to the spec.
 
     :returns: literal representing input BDD
-    :hint: - current node of BDD can be accessed with: ``node.NodeReadIndex()``
-           - 'then-node': ``node.T()``
-           - 'else-node': ``node.E()``
     :warning: variables in cudd nodes may be complemented, check with: ``node.IsComplement()``
     """
 
     #: :type: DdNode
     a_bdd = a_bdd
     if a_bdd.IsConstant():
-        res = int(a_bdd == cudd.One())   # in aiger 0/1 = False/Truesvn
+        res = int(a_bdd == cudd.One())   # in aiger 0/1 = False/True
         return res
 
     # get an index of variable,
@@ -619,7 +580,7 @@ def walk(a_bdd):
     assert a_lit != error_fake_latch.lit, 'using error latch in the definition of output function is not allowed'
 
     # TODO: what about really latching the error bit?
-    # TODO: this fake error latch introduces is bad if specify many safety properties (using bad) ?
+    # TODO: this fake error latch introduced is bad if specify many safety properties (using bad) ?
 
     #: :type: DdNode
     t_bdd = a_bdd.T()
@@ -652,8 +613,6 @@ def walk(a_bdd):
 
 def model_to_aiger(c_bdd, func_bdd, introduce_output):
     """ Update aiger spec with a definition of ``c_bdd``
-
-    :hint: you will need to translate BDD into and-not gates, this is done in stub function ``walk``
     """
     #: :type: DdNode
     c_bdd = c_bdd
@@ -717,10 +676,11 @@ def main(aiger_file_name, out_file_name, output_full_circuit):
         else:
             res, string = aiger_write_to_string(spec, aiger_ascii_mode, 268435456)
             assert res != 0 or out_file_name is None, 'writing failure'
-            print(string)
+            logger.info(string)
         return True
 
     return False
+
 
 def exit_if_status_request(args):
     if args.status:
