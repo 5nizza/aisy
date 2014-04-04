@@ -569,9 +569,6 @@ def walk(a_bdd):
 
     assert a_lit != error_fake_latch.lit, 'using error latch in the definition of output function is not allowed'
 
-    # TODO: what about really latching the error bit?
-    # TODO: this fake error latch introduced is bad if specify many safety properties (using bad) ?
-
     #: :type: DdNode
     t_bdd = a_bdd.T()
     #: :type: DdNode
