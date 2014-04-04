@@ -291,9 +291,7 @@ def pre_sys_bdd(dst_states_bdd, transition_bdd):
     primed_dst_states_bdd = prime_latches_in_bdd(dst_states_bdd)
 
     #: :type: DdNode
-    # intersection = transition_bdd & primed_dst_states_bdd & not_error_states_bdd
-    intersection = transition_bdd & primed_dst_states_bdd
-    # intersection = transition_bdd.Intersect(dst_states_bdd)  # TODO: try this out
+    intersection = transition_bdd & primed_dst_states_bdd  # all predecessors (i.e., if sys and env cooperate)
 
     # print
     # print('dst_states_bdd (after priming)')
@@ -308,7 +306,7 @@ def pre_sys_bdd(dst_states_bdd, transition_bdd):
     # cudd requires to create a cube first..
     if len(get_controllable_vars_bdds()) != 0:
         out_vars_cube_bdd = get_cube(get_controllable_vars_bdds())
-        exist_outs = intersection.ExistAbstract(out_vars_cube_bdd)
+        exist_outs = intersection.ExistAbstract(out_vars_cube_bdd)  # ∃o tau(t,i,t',o)
     else:
         exist_outs = intersection
     # print
@@ -323,7 +321,7 @@ def pre_sys_bdd(dst_states_bdd, transition_bdd):
     # exist_outs.PrintMinterm()
 
     next_state_vars_cube = prime_latches_in_bdd(get_cube(get_all_latches_as_bdds()))
-    exist_next_state = exist_outs.ExistAbstract(next_state_vars_cube)
+    exist_next_state = exist_outs.ExistAbstract(next_state_vars_cube)  # ∃o ∃t'  tau(t,i,t',o)
 
     # print('exists_next_states: quantified vars')
     # next_state_vars_cube.PrintMinterm()
@@ -335,7 +333,7 @@ def pre_sys_bdd(dst_states_bdd, transition_bdd):
     uncontrollable_output_bdds = get_uncontrollable_output_bdds()
     if uncontrollable_output_bdds:
         in_vars_cube_bdd = get_cube(uncontrollable_output_bdds)
-        forall_inputs = exist_next_state.UnivAbstract(in_vars_cube_bdd)
+        forall_inputs = exist_next_state.UnivAbstract(in_vars_cube_bdd)  # ∀i ∃o ∃t'  tau(t,i,t',o)
     else:
         forall_inputs = exist_next_state
 
@@ -366,12 +364,12 @@ def calc_win_region(init_state_bdd, transition_bdd, not_error_bdd):
 
 
 def get_nondet_strategy(win_region_bdd, transition_bdd):
-    """ Get non-deterministic strategy from winning region.
-    If system outputs controllable values that satisfy this strategy, then the system wins.
+    """ Get non-deterministic strategy from the winning region.
+    If the system outputs controllable values that satisfy this strategy, then the system wins.
     That is, non-deterministic strategy represents all possible values of outputs
     in particular state that leads to win:
 
-    ``strategy(x,i,c) = ∃x' W(x) & W(x') & T(x,i,c,x')``
+    ``strategy(x,i,c) = ∃x' W(x) & T(x,i,c,x') & W(x') ``
 
     (Why system cannot lose if adhere to this strategy?)
 
@@ -448,9 +446,8 @@ def extract_output_funcs(strategy, init_state_bdd, transition_bdd):
 
         # print
 
-        # TODO: check on difficult examples, currently I don't have such an example
-        # we need to intersect with can_be_true to narrow the search
-        # negation can cause including states from !W (with err=1)
+        # We need to intersect with can_be_true to narrow the search.
+        # Negation can cause including states from !W (with err=1)
         #: :type: DdNode
         must_be_true = (~can_be_false) & can_be_true
         must_be_false = (~can_be_true) & can_be_false
@@ -468,15 +465,14 @@ def extract_output_funcs(strategy, init_state_bdd, transition_bdd):
         # print'0123456789'
         # care_set.PrintMinterm()
 
-        # TODO: find an example when it matters
         # We use 'restrict' operation, but we could also do just:
         # c_model = must_be_true -> care_set
-        # ..but this is less efficient, since we cannot set c=1 if it is not in care_set, but we could
+        # ..but this is (probably) less efficient, since we cannot set c=1 if it is not in care_set, but we could.
         #
-        # restrict on the other side applies optimizations to find smaller bdd
-        # it cannot be expressed using boolean logic operations since we would need to say:
+        # Restrict on the other side applies optimizations to find smaller bdd.
+        # It cannot be expressed using boolean logic operations since we would need to say:
         # must_be_true = ite(care_set, must_be_true, "don't care")
-        # and "don't care" cannot be expressed in boolean logic
+        # and "don't care" cannot be expressed in boolean logic.
 
         # Restrict operation:
         #   on care_set: must_be_true.restrict(care_set) <-> must_be_true
@@ -513,7 +509,6 @@ def synthesize():
 
     # print'win region is'
     if win_region == cudd.Zero():
-        # print 'empty!'
         return None
 
     # win_region.PrintMinterm()
@@ -676,7 +671,7 @@ def main(aiger_file_name, out_file_name, output_full_circuit):
         else:
             res, string = aiger_write_to_string(spec, aiger_ascii_mode, 268435456)
             assert res != 0 or out_file_name is None, 'writing failure'
-            logger.info(string)
+            logger.info('\n' + string)
         return True
 
     return False
