@@ -183,12 +183,12 @@ def compose_transition_bdd():
         #: :type: aiger_symbol
         l = l
 
+        next_value_bdd = get_bdd_for_value(int(l.next))
+
         next_value_variable = get_primed_variable_as_bdd(l.lit)
         # print'next_value_variable for latch ' + str(l.lit) + ' ' + str(l.name)
         # print'0123456789'
         # next_value_variable.PrintMinterm()
-
-        next_value_bdd = get_bdd_for_value(int(l.next))
 
         latch_transition = make_bdd_eq(next_value_variable, next_value_bdd)
         # print'latch transition'
@@ -344,7 +344,7 @@ def pre_sys_bdd(dst_states_bdd, transition_bdd):
 
 
 def calc_win_region(init_state_bdd, transition_bdd, not_error_bdd):
-    """ Calculate a winning region for safety game.
+    """ Calculate a winning region for the safety game: win = greatest_fix_point.X [not_error & pre_sys(X)]
     :return: BDD representing the winning region
     """
 
@@ -365,9 +365,8 @@ def calc_win_region(init_state_bdd, transition_bdd, not_error_bdd):
 
 def get_nondet_strategy(win_region_bdd, transition_bdd):
     """ Get non-deterministic strategy from the winning region.
-    If the system outputs controllable values that satisfy this strategy, then the system wins.
-    That is, non-deterministic strategy represents all possible values of outputs
-    in particular state that leads to win:
+    If the system outputs controllable values that satisfy this non-deterministic strategy, then the system wins.
+    I.e., a non-deterministic strategy describes for each state all possible plausible output values:
 
     ``strategy(x,i,c) = ∃x' W(x) & T(x,i,c,x') & W(x') ``
 
@@ -396,6 +395,8 @@ def get_nondet_strategy(win_region_bdd, transition_bdd):
 
 
 def compose_init_state_bdd():
+    """ Initial state is 'all latches are zero' """
+
     logger.info('compose_init_state_bdd..')
 
     init_state_bdd = cudd.One()
@@ -408,13 +409,12 @@ def compose_init_state_bdd():
     return init_state_bdd
 
 
-def extract_output_funcs(strategy, init_state_bdd, transition_bdd):
-    """ Calculate BDDs for output functions given non-deterministic winning strategy.
+def extract_output_funcs(non_det_strategy, init_state_bdd, transition_bdd):
+    """
+    Calculate BDDs for output functions given a non-deterministic winning strategy.
+    Cofactor-based approach.
 
-    :param strategy: non-deterministic winning strategy
     :return: dictionary ``controllable_variable_bdd -> func_bdd``
-    :hint: to calculate Restrict in cudd: ``func.Restrict(care_set)``
-           (on care_set: ``func.Restrict(care_set) <-> func``)
     """
 
     logger.info('extract_output_funcs..')
@@ -424,16 +424,13 @@ def extract_output_funcs(strategy, init_state_bdd, transition_bdd):
     for c in get_controllable_vars_bdds():
         logger.info('getting output function for ' + aiger_is_input(spec, strip_lit(c.NodeReadIndex())).name)
 
-        #: :type: DdNode
-        # strategy = strategy & calc_reachable_set(strategy, init_state_bdd, transition_bdd)
-
         others = set(set(all_outputs).difference({c}))
         if others:
             others_cube = get_cube(others)
             #: :type: DdNode
-            c_arena = strategy.ExistAbstract(others_cube)
+            c_arena = non_det_strategy.ExistAbstract(others_cube)
         else:
-            c_arena = strategy
+            c_arena = non_det_strategy
 
         can_be_true = c_arena.Cofactor(c)  # states (x,i) in which c can be true
         can_be_false = c_arena.Cofactor(~c)
@@ -443,7 +440,6 @@ def extract_output_funcs(strategy, init_state_bdd, transition_bdd):
         # can_be_true.PrintMinterm()
         # print'can_be_false'
         # can_be_false.PrintMinterm()
-
         # print
 
         # We need to intersect with can_be_true to narrow the search.
@@ -480,7 +476,7 @@ def extract_output_funcs(strategy, init_state_bdd, transition_bdd):
 
         output_models[c] = c_model
 
-        strategy = strategy & make_bdd_eq(c, c_model)
+        non_det_strategy = non_det_strategy & make_bdd_eq(c, c_model)
 
         # print'c_model'
         # c_model.PrintMinterm()
@@ -498,10 +494,9 @@ def synthesize():
     logger.info('synthesize..')
 
     #: :type: DdNode
-    transition_bdd = compose_transition_bdd()
+    init_state_bdd = compose_init_state_bdd()    #: :type: DdNode
 
-    #: :type: DdNode
-    init_state_bdd = compose_init_state_bdd()
+    transition_bdd = compose_transition_bdd()
 
     #: :type: DdNode
     not_error_bdd = ~get_bdd_for_value(error_fake_latch.lit)
@@ -513,9 +508,9 @@ def synthesize():
 
     # win_region.PrintMinterm()
 
-    strategy = get_nondet_strategy(win_region, transition_bdd)
+    non_det_strategy = get_nondet_strategy(win_region, transition_bdd)
 
-    func_by_var = extract_output_funcs(strategy, init_state_bdd, transition_bdd)
+    func_by_var = extract_output_funcs(non_det_strategy, init_state_bdd, transition_bdd)
 
     return func_by_var
 
