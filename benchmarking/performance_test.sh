@@ -7,8 +7,9 @@
 #   Institute for Applied Information Processing and Communications,
 #   Graz University of Technology.
 #
-# Version: 1.0.1
-# Created by Robert Koenighofer, robert.koenighofer@iaik.tugraz.at
+# Version: 1.0.2
+# Created by Robert Koenighofer, robert.koenighofer@iaik.tugraz.at 
+# Comments/edits by Swen Jacobs, swen.jacobs@iaik.tugraz.at
 
 # This directory:
 DIR=`dirname $0`/
@@ -20,7 +21,8 @@ MEMORY_LIMIT=2000000
 
 # Maybe change the following line to point to GNU time:
 GNU_TIME="/usr/bin/time"
-MODEL_CHECKER="$DIR/ext_tools/blimc/blimc"
+MODEL_CHECKER="$DIR/ext_tools/blimc/blimc"          
+MODEL_CHECKER_OPTIONS="15" # For blimc, this is the bound for BMC
 SYNT_CHECKER="$DIR/ext_tools/syntactic_checker.py"
 
 # The directory where the benchmarks are located:
@@ -282,7 +284,7 @@ do
          #------------------------------------------------------------------------------
          # BEGIN model checking
          echo -n " Model checking the synthesis result ... "
-         ${GNU_TIME} --quiet --output=${RES_TXT_FILE} -a -f "Model-checking time: %e sec (Real time) / %U sec (User CPU time)" $MODEL_CHECKER $outfile_path > /dev/null 2>&1
+         ${GNU_TIME} --quiet --output=${RES_TXT_FILE} -a -f "Model-checking time: %e sec (Real time) / %U sec (User CPU time)" $MODEL_CHECKER $MODEL_CHECKER_OPTIONS $outfile_path > /dev/null 2>&1
          check_res=$?
          echo " done. "
          if [[ $check_res == 20 ]];
