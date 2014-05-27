@@ -7,8 +7,9 @@
 #   Institute for Applied Information Processing and Communications,
 #   Graz University of Technology.
 #
-# Version: 1.0.1
-# Created by Robert Koenighofer, robert.koenighofer@iaik.tugraz.at
+# Version: 1.0.2
+# Created by Robert Koenighofer, robert.koenighofer@iaik.tugraz.at 
+# Comments/edits by Swen Jacobs, swen.jacobs@iaik.tugraz.at
 
 # This directory:
 DIR=`dirname $0`/
@@ -283,8 +284,12 @@ do
          #------------------------------------------------------------------------------
          # BEGIN model checking
          echo -n " Model checking the synthesis result ... "
+<<<<<<< HEAD
          #${GNU_TIME} --quiet --output=${RES_TXT_FILE} -a -f "Model-checking time: %e sec (Real time) / %U sec (User CPU time)" $MODEL_CHECKER $outfile_path > /dev/null 2>&1
          ${GNU_TIME} --quiet --output=${RES_TXT_FILE} -a -f "Model-checking time: %e sec (Real time) / %U sec (User CPU time)" $MODEL_CHECKER $outfile_path 
+=======
+         ${GNU_TIME} --quiet --output=${RES_TXT_FILE} -a -f "Model-checking time: %e sec (Real time) / %U sec (User CPU time)" $MODEL_CHECKER $MODEL_CHECKER_OPTIONS $outfile_path > /dev/null 2>&1
+>>>>>>> f40a9fdc0ae6743af040c08c267593c56715c3c1
          check_res=$?
          echo " done. "
          echo "result is $check_res"
