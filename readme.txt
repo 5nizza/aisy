@@ -18,4 +18,3 @@ To run:
 Some self-testing functionality is included in ``run_status_tests.py``.
 
 Email me in case of questions/suggestions/bugs: ayrat.khalimovatgmail.
-
