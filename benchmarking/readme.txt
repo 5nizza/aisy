@@ -14,11 +14,14 @@ It requires Linux/Unix or Windows with Cygwin and the tools
  - build-essentials (gcc, make, ...)
 
 To run the benchmarks on your tool you have to:
- - compile the model-checker by opening a shell in the directory
-   'ext_tools/blimc' and executing the commands:
-   > ./configure
-   > make
-   This should create the executable 'ext_tools/blimc/blimc'
+ - compile a model-checker
+   - if use blimc then: open a shell in the directory 'ext_tools/blimc' 
+     and execute the commands:
+     > ./configure
+     > make
+     This should create the executable 'ext_tools/blimc/blimc'
+   - if use ic3 go to ic3-ref directory and follow instructions in README
+ - you can change the model checker used by editing call_model_checker.sh script
  - Change the variable COMMAND in call_synth_tool.sh to some command
    which invokes your tool.
  - Maybe modify the variable GNU_TIME in performance_test.sh to

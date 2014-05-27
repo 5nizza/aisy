@@ -657,6 +657,8 @@ def main(aiger_file_name, out_file_name, output_full_circuit):
     if func_by_var:
         for (c_bdd, func_bdd) in func_by_var.items():
             model_to_aiger(c_bdd, func_bdd, output_full_circuit)
+        
+        aiger_reencode(spec);  # some model checkers do not like unordered variable names (when e.g. latch is > add) 
 
         if out_file_name:
             aiger_open_and_write_to_file(spec, out_file_name)

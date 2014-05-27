@@ -1,17 +1,3 @@
-%module aiger_wrap
-
-%{
-#define SWIG_FILE_WITH_INIT
-#include "aiger.h"
-%}
-
-
-%include <cstring.i>
-%cstring_output_maxsize(char *str, size_t len);
-
-
-%feature("autodoc", "1");
-
 /***************************************************************************
 Copyright (c) 2006 - 2011, Armin Biere, Johannes Kepler University.
 
@@ -41,6 +27,12 @@ IN THE SOFTWARE.
  * and 'simpaig.h'.
  * library.
  */
+#ifndef aiger_h_INCLUDED
+#define aiger_h_INCLUDED
+
+#include <stdio.h>
+
+/*------------------------------------------------------------------------*/
 
 #define AIGER_VERSION "1.9"
 
@@ -297,6 +289,7 @@ const unsigned char * aiger_coi (aiger *);		/* [1..maxvar] */
  * used.  The latter returns the previously returned error message.
  */
 const char *aiger_read_from_file (aiger *, FILE *);
+const char *aiger_read_from_string (aiger *, const char *str);
 const char *aiger_read_generic (aiger *, void *state, aiger_get);
 
 /*------------------------------------------------------------------------*/
@@ -360,28 +353,4 @@ aiger_symbol *aiger_is_input (aiger *, unsigned lit);
 aiger_symbol *aiger_is_latch (aiger *, unsigned lit);
 aiger_and *aiger_is_and (aiger *, unsigned lit);
 
-
-
-/* added functionality to aiger.h */
-void
-aiger_redefine_input_as_and (aiger* public, unsigned input_lit, unsigned rhs0, unsigned rhs1);
-
-
-/* this function has been made 'public' */
-void 
-aiger_reencode (aiger* public);
-
-
-/* workaround of lack of dereferencing in swig */
-
-%inline %{
-
-aiger_symbol *get_aiger_symbol(aiger_symbol *base, unsigned index) {
-    return base+index;
-}
-
-aiger_and *get_aiger_and(aiger_and *base, unsigned index) {
-    return base+index;
-}
-
-%}
+#endif
