@@ -21,7 +21,6 @@ MEMORY_LIMIT=2000000
 
 # Maybe change the following line to point to GNU time:
 GNU_TIME="/usr/bin/time"
-#MODEL_CHECKER="$DIR/ext_tools/blimc/blimc"
 MODEL_CHECKER="$DIR/call_model_checker.sh"
 SYNT_CHECKER="$DIR/ext_tools/syntactic_checker.py"
 
