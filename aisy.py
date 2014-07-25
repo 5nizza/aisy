@@ -485,7 +485,7 @@ def extract_output_funcs(non_det_strategy, init_state_bdd, transition_bdd):
     return output_models
 
 
-def synthesize():
+def synthesize(realiz_check):
     """ Calculate winning region and extract output functions.
 
     :return: - if realizable: dictionary: controllable_variable_bdd -> func_bdd
@@ -504,15 +504,18 @@ def synthesize():
 
     # print'win region is'
     if win_region == cudd.Zero():
-        return None
+        return False, None
 
     # win_region.PrintMinterm()
+
+    if realiz_check:
+        return True, None
 
     non_det_strategy = get_nondet_strategy(win_region, transition_bdd)
 
     func_by_var = extract_output_funcs(non_det_strategy, init_state_bdd, transition_bdd)
 
-    return func_by_var
+    return True, func_by_var
 
 
 def negated(lit):
@@ -643,7 +646,7 @@ def init_cudd():
     cudd.EnableReorderingReporting()
 
 
-def main(aiger_file_name, out_file_name, output_full_circuit):
+def main(aiger_file_name, out_file_name, output_full_circuit, realiz_check):
     """ Open aiger file, synthesize the circuit and write the result to output file.
 
     :returns: boolean value 'is realizable?'
@@ -652,13 +655,16 @@ def main(aiger_file_name, out_file_name, output_full_circuit):
 
     parse_into_spec(aiger_file_name)
 
-    func_by_var = synthesize()
+    realizable, func_by_var = synthesize(realiz_check)
 
-    if func_by_var:
+    if realiz_check:
+        return realizable
+
+    if realizable:
         for (c_bdd, func_bdd) in func_by_var.items():
             model_to_aiger(c_bdd, func_bdd, output_full_circuit)
         
-        aiger_reencode(spec);  # some model checkers do not like unordered variable names (when e.g. latch is > add) 
+        aiger_reencode(spec)  # some model checkers do not like unordered variable names (when e.g. latch is > add)
 
         if out_file_name:
             aiger_open_and_write_to_file(spec, out_file_name)
@@ -692,6 +698,9 @@ if __name__ == '__main__':
     parser.add_argument('--status', '-s', action='store_true', default=False,
                         help='Print current status of development')
 
+    parser.add_argument('--realizability', '-r', action='store_true', default=False,
+                        help='Check Realizability only')
+
     args = parser.parse_args()
     
     exit_if_status_request(args)
@@ -702,6 +711,8 @@ if __name__ == '__main__':
 
     setup_logging(0)
     
-    is_realizable = main(args.aiger, args.out, args.full)
+    is_realizable = main(args.aiger, args.out, args.full, args.realizability)
+
+    logger.info(['unrealizable', 'realizable'][is_realizable])
 
     exit([EXIT_STATUS_UNREALIZABLE, EXIT_STATUS_REALIZABLE][is_realizable])
