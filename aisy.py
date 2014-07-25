@@ -643,6 +643,7 @@ def init_cudd():
     #CUDD_REORDER_LAZY_SIFT,
     #CUDD_REORDER_EXACT
     cudd.AutodynEnable(4)
+    # cudd.AutodynDisable()
     cudd.EnableReorderingReporting()
 
 
