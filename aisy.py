@@ -380,13 +380,8 @@ def get_nondet_strategy(win_region_bdd, transition_bdd):
 
     #: :type: DdNode
     primed_win_region_bdd = prime_latches_in_bdd(win_region_bdd)
-
-    # print'primed_win_region_bdd'
-    # print'0123456789'
-    # primed_win_region_bdd.PrintMinterm()
-    # print
-
-    intersection = (primed_win_region_bdd & transition_bdd)
+    # TODO: use more efficient exist_and
+    intersection = (win_region_bdd & primed_win_region_bdd & transition_bdd)
 
     next_vars_cube = prime_latches_in_bdd(get_cube(get_all_latches_as_bdds()))
     strategy = intersection.ExistAbstract(next_vars_cube)
@@ -488,25 +483,24 @@ def extract_output_funcs(non_det_strategy, init_state_bdd, transition_bdd):
 def synthesize(realiz_check):
     """ Calculate winning region and extract output functions.
 
-    :return: - if realizable: dictionary: controllable_variable_bdd -> func_bdd
-             - if not: None
+    :return: - if realizable: <True, dictionary: controllable_variable_bdd -> func_bdd>
+             - if not: <False, None>
     """
     logger.info('synthesize..')
 
     #: :type: DdNode
-    init_state_bdd = compose_init_state_bdd()    #: :type: DdNode
-
+    init_state_bdd = compose_init_state_bdd()
+    #: :type: DdNode
     transition_bdd = compose_transition_bdd()
-
+    # transition_bdd.PrintMinterm()
     #: :type: DdNode
     not_error_bdd = ~get_bdd_for_value(error_fake_latch.lit)
     win_region = calc_win_region(init_state_bdd, transition_bdd, not_error_bdd)
+    # win_region.PrintMinterm()
 
     # print'win region is'
     if win_region == cudd.Zero():
         return False, None
-
-    # win_region.PrintMinterm()
 
     if realiz_check:
         return True, None
