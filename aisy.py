@@ -186,13 +186,8 @@ def compose_transition_bdd():
         next_value_bdd = get_bdd_for_value(int(l.next))
 
         next_value_variable = get_primed_variable_as_bdd(l.lit)
-        # print'next_value_variable for latch ' + str(l.lit) + ' ' + str(l.name)
-        # print'0123456789'
-        # next_value_variable.PrintMinterm()
 
         latch_transition = make_bdd_eq(next_value_variable, next_value_bdd)
-        # print'latch transition'
-        # latch_transition.PrintMinterm()
 
         transition &= latch_transition
 
@@ -293,42 +288,15 @@ def pre_sys_bdd(dst_states_bdd, transition_bdd):
     #: :type: DdNode
     intersection = transition_bdd & primed_dst_states_bdd  # all predecessors (i.e., if sys and env cooperate)
 
-    # print
-    # print('dst_states_bdd (after priming)')
-    # print"0123456789"
-    # primed_dst_states_bdd.PrintMinterm()
-    # print('transition_bdd')
-    # transition_bdd.PrintMinterm()
-    # print('intersection == set of states from which the system can reach safe states are (wo quantifications)')
-    # print"0123456789"
-    # intersection.PrintMinterm()
-
     # cudd requires to create a cube first..
     if len(get_controllable_vars_bdds()) != 0:
         out_vars_cube_bdd = get_cube(get_controllable_vars_bdds())
         exist_outs = intersection.ExistAbstract(out_vars_cube_bdd)  # ∃o tau(t,i,t',o)
     else:
         exist_outs = intersection
-    # print
-    # print
-    #
-    # print('exist_outs: quantified vars')
-    # print"0123456789"
-    # out_vars_cube_bdd.PrintMinterm()
-    # print('before quantifying')
-    # intersection.PrintMinterm()
-    # print('after quantifying')
-    # exist_outs.PrintMinterm()
 
     next_state_vars_cube = prime_latches_in_bdd(get_cube(get_all_latches_as_bdds()))
     exist_next_state = exist_outs.ExistAbstract(next_state_vars_cube)  # ∃o ∃t'  tau(t,i,t',o)
-
-    # print('exists_next_states: quantified vars')
-    # next_state_vars_cube.PrintMinterm()
-    # print('before quantifying')
-    # exist_outs.PrintMinterm()
-    # print('after quantifying')
-    # exist_next_state.PrintMinterm()
 
     uncontrollable_output_bdds = get_uncontrollable_output_bdds()
     if uncontrollable_output_bdds:
@@ -336,9 +304,6 @@ def pre_sys_bdd(dst_states_bdd, transition_bdd):
         forall_inputs = exist_next_state.UnivAbstract(in_vars_cube_bdd)  # ∀i ∃o ∃t'  tau(t,i,t',o)
     else:
         forall_inputs = exist_next_state
-
-    # print('forall_exists')
-    # forall_inputs.PrintMinterm()
 
     return forall_inputs
 
@@ -415,11 +380,11 @@ def extract_output_funcs(non_det_strategy, init_state_bdd, transition_bdd):
     logger.info('extract_output_funcs..')
 
     output_models = dict()
-    all_outputs = get_controllable_vars_bdds()
+    controls = get_controllable_vars_bdds()
     for c in get_controllable_vars_bdds():
         logger.info('getting output function for ' + aiger_is_input(spec, strip_lit(c.NodeReadIndex())).name)
 
-        others = set(set(all_outputs).difference({c}))
+        others = set(set(controls).difference({c}))
         if others:
             others_cube = get_cube(others)
             #: :type: DdNode
@@ -427,15 +392,10 @@ def extract_output_funcs(non_det_strategy, init_state_bdd, transition_bdd):
         else:
             c_arena = non_det_strategy
 
+        # c_arena.PrintMinterm()
+
         can_be_true = c_arena.Cofactor(c)  # states (x,i) in which c can be true
         can_be_false = c_arena.Cofactor(~c)
-
-        # print'can_be_true'
-        # print'0123456789'
-        # can_be_true.PrintMinterm()
-        # print'can_be_false'
-        # can_be_false.PrintMinterm()
-        # print
 
         # We need to intersect with can_be_true to narrow the search.
         # Negation can cause including states from !W (with err=1)
@@ -443,18 +403,7 @@ def extract_output_funcs(non_det_strategy, init_state_bdd, transition_bdd):
         must_be_true = (~can_be_false) & can_be_true
         must_be_false = (~can_be_true) & can_be_false
 
-        # print'must_be_true'
-        # print'0123456789'
-        # must_be_true.PrintMinterm()
-        # print'must_be_false'
-        # must_be_false.PrintMinterm()
-        # print
-
         care_set = (must_be_true | must_be_false)
-
-        # print'care set is'
-        # print'0123456789'
-        # care_set.PrintMinterm()
 
         # We use 'restrict' operation, but we could also do just:
         # c_model = must_be_true -> care_set
@@ -473,10 +422,6 @@ def extract_output_funcs(non_det_strategy, init_state_bdd, transition_bdd):
 
         non_det_strategy = non_det_strategy & make_bdd_eq(c, c_model)
 
-        # print'c_model'
-        # c_model.PrintMinterm()
-        # print
-
     return output_models
 
 
@@ -493,12 +438,11 @@ def synthesize(realiz_check):
     #: :type: DdNode
     transition_bdd = compose_transition_bdd()
     # transition_bdd.PrintMinterm()
+
     #: :type: DdNode
     not_error_bdd = ~get_bdd_for_value(error_fake_latch.lit)
     win_region = calc_win_region(init_state_bdd, transition_bdd, not_error_bdd)
-    # win_region.PrintMinterm()
 
-    # print'win region is'
     if win_region == cudd.Zero():
         return False, None
 
@@ -636,9 +580,9 @@ def init_cudd():
     #CUDD_REORDER_LINEAR_CONVERGE,
     #CUDD_REORDER_LAZY_SIFT,
     #CUDD_REORDER_EXACT
-    cudd.AutodynEnable(4)
+    # cudd.AutodynEnable(4)
     # cudd.AutodynDisable()
-    cudd.EnableReorderingReporting()
+    # cudd.EnableReorderingReporting()
 
 
 def main(aiger_file_name, out_file_name, output_full_circuit, realiz_check):
@@ -694,7 +638,7 @@ if __name__ == '__main__':
                         help='Print current status of development')
 
     parser.add_argument('--realizability', '-r', action='store_true', default=False,
-                        help='Check Realizability only')
+                        help='Check Realizability only (do not produce circuits)')
 
     args = parser.parse_args()
     
