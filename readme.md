@@ -29,3 +29,6 @@ Some self-testing functionality is included in `run_status_tests.py`.
 
 ## Contact ##
 Email to ayrat.khalimovatgmail or post messages here.
+
+## Authors ##
+Ayrat Khalimov, Robert Koenighoffer, and SCOS group at TU Graz.
