@@ -1,4 +1,4 @@
-An example of synthesis tool from Aiger http://fmv.jku.at/aiger/ circuits format.      
+Simple synthesis tool from Aiger http://fmv.jku.at/aiger/ circuits format.      
 Some description of the tool is available at        
 https://verify.iaik.tugraz.at/research/bin/view/Ausgewaehltekapitel/AkdvExercise14           
 Some slides        
