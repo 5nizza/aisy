@@ -1,8 +1,10 @@
 An example of synthesis tool from Aiger http://fmv.jku.at/aiger/ circuits format.
 
 Installation requirements:
-  - pycudd library: http://bears.ece.ucsb.edu/pycudd.html
+  - pycudd library: [http://bears.ece.ucsb.edu/pycudd.html](http://bears.ece.ucsb.edu/pycudd.html)
+    (tested with version 2.0.2)
   - swig library: http://www.swig.org/
+    (tested with versions 2.0.9, and seems to work with 3.0.2)
   - (probably) python2.7 headers
 
 After installing pycudd library add cudd libraries into your LD_LIBRARY_PATH:
