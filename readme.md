@@ -1,4 +1,10 @@
-An example of synthesis tool from Aiger http://fmv.jku.at/aiger/ circuits format.
+An example of synthesis tool from Aiger http://fmv.jku.at/aiger/ circuits format.      
+Some description of the tool is available at        
+https://verify.iaik.tugraz.at/research/bin/view/Ausgewaehltekapitel/AkdvExercise14           
+Some slides        
+https://verify.iaik.tugraz.at/research/pub/Ausgewaehltekapitel/AkdvExercise14/aisy.pdf        
+and even a recorded video of presentation given in 2014 in our TU Graz class           
+https://bigfiles.iaik.tugraz.at/get/9c3810d6366b34e721d912b3489c2798         
 
 ## Setup ##
 Prerequisites:
