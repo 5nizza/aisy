@@ -32,7 +32,8 @@ Email me in case questions/suggestions/bugs: ayrat.khalimov at gmail
 ----------------------
 """
 
-status = ["TODO: check the case when output functions depend on error fake latch"]
+status = ["TODO: 1) check the case when output functions depend on error fake latch\n"
+          "TODO: 2) optim: get rid of fake latches"]
 
 
 import argparse
@@ -40,7 +41,6 @@ import logging
 import pycudd
 import sys
 from aiger_swig.aiger_wrap import *
-from aiger_swig.aiger_wrap import aiger
 
 #don't change status numbers since they are used by the performance script
 EXIT_STATUS_REALIZABLE = 10
@@ -53,10 +53,16 @@ spec = None
 #: :type: DdManager
 cudd = None
 
-# error output can be latched or unlatched, latching makes things look like in lectures, lets emulate this
+# Spec outputs (bad, invariant, fair (B,C,F)) can be latched or unlatched.
+# Latching them makes things look like in most online lectures.
+# Let's emulate this by introducing a non-existing latch.
+# Note: none of outputs can depend on them. TODO: get rid of this
 #: :type: aiger_symbol
-error_fake_latch = None
-
+bad_fake_latch = None
+#: :type: aiger_symbol
+fair_fake_latch = None
+#: :type: aiger_symbol
+inv_fake_latch = None
 
 #: :type: Logger
 logger = None
@@ -87,17 +93,49 @@ def strip_lit(l):
 
 
 def introduce_error_latch_if():
-    global error_fake_latch
-    if error_fake_latch:
+    global bad_fake_latch, inv_fake_latch, fair_fake_latch
+
+    if bad_fake_latch:
         return
 
-    error_fake_latch = aiger_symbol()
-    #: :type: aiger_symbol
-    error_symbol = get_err_symbol()
+    assert not (spec.num_bad > 0 and spec.num_outputs > 0)
+    assert spec.num_bad <= 1, 'not supported yet'  # TODOfut
+    assert spec.num_fairness <= 1, 'not supported yet'
+    assert spec.num_constraints <= 1, 'not supported yet'
 
-    error_fake_latch.lit = (int(spec.maxvar) + 1) * 2
-    error_fake_latch.name = 'fake_error_latch'
-    error_fake_latch.next = error_symbol.lit
+    bad_symbol = None
+    if spec.num_outputs == 1:
+        bad_symbol = spec.outputs  # swig returns one element instead of array, to iterate over array use iterate_symbols
+    else:
+        if spec.num_bad == 1:
+            bad_symbol = spec.bad
+
+    cur_maxvar = int(spec.maxvar)
+    if bad_symbol:
+        bad_fake_latch = aiger_symbol()
+
+        bad_fake_latch.lit = (cur_maxvar + 1) * 2
+        cur_maxvar += 1
+        bad_fake_latch.name = 'bad_fake_latch'
+        bad_fake_latch.next = bad_symbol.lit
+
+    if spec.num_fairness == 1:
+        fair_symbol = spec.fairness
+
+        fair_fake_latch = aiger_symbol()
+        fair_fake_latch.lit = (cur_maxvar + 1) * 2
+        cur_maxvar += 1
+        fair_fake_latch.name = 'fair_fake_latch'
+        fair_fake_latch.next = fair_symbol.lit
+
+    if spec.num_fairness == 1:
+        inv_symbol = spec.constraints
+
+        inv_fake_latch = aiger_symbol()
+        inv_fake_latch.lit = (cur_maxvar + 1) * 2
+        cur_maxvar += 1
+        inv_fake_latch.name = 'inv_fake_latch'
+        inv_fake_latch.next = inv_symbol.lit
 
 
 def iterate_latches_and_error():
@@ -106,7 +144,9 @@ def iterate_latches_and_error():
     for i in range(int(spec.num_latches)):
         yield get_aiger_symbol(spec.latches, i)
 
-    yield error_fake_latch
+    for l in [bad_fake_latch, inv_fake_latch, fair_fake_latch]:
+        if l is not None:
+            yield l
 
 
 def parse_into_spec(aiger_file_name):
@@ -120,8 +160,11 @@ def parse_into_spec(aiger_file_name):
 
 
 def get_lit_type(stripped_lit):
-    if stripped_lit == error_fake_latch.lit:
-        return None, error_fake_latch, None
+    global bad_fake_latch, fair_fake_latch, inv_fake_latch
+
+    for l in [bad_fake_latch, inv_fake_latch, fair_fake_latch]:
+        if l and l.lit == stripped_lit:
+            return None, l, None
 
     input_ = aiger_is_input(spec, stripped_lit)
     latch_ = aiger_is_latch(spec, stripped_lit)
@@ -197,11 +240,6 @@ def compose_transition_bdd():
     return transition
 
 
-def get_err_symbol():
-    assert spec.num_outputs == 1
-    return spec.outputs  # swig return one element instead of array, to iterate over array use iterate_symbols
-
-
 def get_cube(variables):
     assert len(variables)
 
@@ -271,7 +309,10 @@ def unprime_latches_in_bdd(bdd):
 
 
 def pre_sys_bdd(dst_states_bdd, transition_bdd):
-    """ Calculate predecessor states of given states.
+    """
+    Calculate predecessor states of given states:
+
+         ∀i ∃o ∃t'  tau(t,i,t',o)
 
     :return: BDD representation of predecessor states
 
@@ -308,24 +349,35 @@ def pre_sys_bdd(dst_states_bdd, transition_bdd):
     return forall_inputs
 
 
-def calc_win_region(init_state_bdd, transition_bdd, not_error_bdd):
-    """ Calculate a winning region for the safety game: win = greatest_fix_point.X [not_error & pre_sys(X)]
-    :return: BDD representing the winning region
+def calc_win_region(init_state_bdd, transition_bdd, not_error_bdd, inv_bdd, fair_bdd):
     """
+    Calculate a winning region for the buchi game:
+
+        gfp.Y lfp.X [F & pre_sys(Y)  |  pre_sys(X)]
+
+    :return: BDD of the winning region
+    """
+
+    # CURRENT: add invariants, and bad
 
     logger.info('calc_win_region..')
 
-    new_set_bdd = cudd.One()
-    while True:
-        curr_set_bdd = new_set_bdd
+    Y = cudd.One()
+    while True:   # TODO: optimize -- try algorithm from the Krish's lectures
+        X = cudd.Zero()
+        while True:
+            nX = (fair_bdd & pre_sys_bdd(Y, transition_bdd)) \
+                    | pre_sys_bdd(X, transition_bdd)
+            if nX == X:
+                break
+            X = nX
 
-        new_set_bdd = not_error_bdd & pre_sys_bdd(curr_set_bdd, transition_bdd)
+        nY = X
+        if nY == Y:
+            break
+        Y = nY
 
-        if (new_set_bdd & init_state_bdd) == cudd.Zero():
-            return cudd.Zero()
-
-        if new_set_bdd == curr_set_bdd:
-            return new_set_bdd
+    return Y
 
 
 def get_nondet_strategy(win_region_bdd, transition_bdd):
@@ -440,7 +492,7 @@ def synthesize(realiz_check):
     # transition_bdd.PrintMinterm()
 
     #: :type: DdNode
-    not_error_bdd = ~get_bdd_for_value(error_fake_latch.lit)
+    not_error_bdd = ~get_bdd_for_value(bad_fake_latch.lit)
     win_region = calc_win_region(init_state_bdd, transition_bdd, not_error_bdd)
 
     if win_region == cudd.Zero():
@@ -508,7 +560,7 @@ def walk(a_bdd):
     # but fake error latch will not be used in output functions (at least we don't need this..)
     a_lit = a_bdd.NodeReadIndex()
 
-    assert a_lit != error_fake_latch.lit, 'using error latch in the definition of output function is not allowed'
+    assert a_lit != bad_fake_latch.lit, 'using error latch in the definition of outputs is not allowed'
 
     #: :type: DdNode
     t_bdd = a_bdd.T()
@@ -602,8 +654,9 @@ def main(aiger_file_name, out_file_name, output_full_circuit, realiz_check):
     if realizable:
         for (c_bdd, func_bdd) in func_by_var.items():
             model_to_aiger(c_bdd, func_bdd, output_full_circuit)
-        
-        aiger_reencode(spec)  # some model checkers do not like unordered variable names (when e.g. latch is > add)
+
+        # some model checkers do not like unordered variable names (when e.g. latch is > add)
+        aiger_reencode(spec)
 
         if out_file_name:
             aiger_open_and_write_to_file(spec, out_file_name)
@@ -629,7 +682,8 @@ def exit_if_status_request(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Aiger Format Based Simple Synthesizer')
-    parser.add_argument('aiger', metavar='aiger', type=str, nargs='?', default=None, help='input specification in AIGER format')
+    parser.add_argument('aiger', metavar='aiger', type=str, nargs='?', default=None,
+                        help='input specification in AIGER format')
     parser.add_argument('--out', '-o', metavar='out', type=str, required=False, default=None,
                         help='output file in AIGER format (if realizable)')
     parser.add_argument('--full', action='store_true', default=False,
