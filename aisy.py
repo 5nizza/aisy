@@ -1,4 +1,3 @@
-#!/usr/bin/env python2.7
 # coding=utf-8
 
 """
@@ -294,32 +293,15 @@ def modified_pre_sys_bdd(dst_states_bdd, transition_bdd, inv_bdd, err_bdd):
            inv(t,i,o)  ->  ~err(t,i,o) & ∃t' tau(t,i,t',o) & Dst(t')
 
     :return: BDD representation of the predecessor states
+
+    :hint: A normal version called `pre_sys_bdd` that does not account for invariants and err signals can be found here:
+    https://bitbucket.org/art_haali/aisy-classroom/src/95baf6e8a02e92d02c2fce1749f8468cadc5e704/aisy.py
+    Use it as inspiration/documentation of how to use cudd.
     """
 
-    #: :type: DdNode
-    primed_dst_states_bdd = prime_latches_in_bdd(dst_states_bdd)
+    logger.warn('IMPLEMENT ME')
 
-    #: :type: DdNode
-    tau_and_dst = transition_bdd & primed_dst_states_bdd  # all predecessors (i.e., if sys and env cooperate)
-
-    # cudd requires to create a cube first
-    next_state_vars_cube = prime_latches_in_bdd(get_cube(get_all_latches_as_bdds()))
-    exist_tn__tau_and_dst = tau_and_dst.ExistAbstract(next_state_vars_cube)  # ∃t'  tau(t,i,t',o) & dst(t')
-
-    assert len(get_controllable_vars_bdds()) > 0  # TODOfut: without outputs make it model checker
-
-    inv_impl_nerr = ~(inv_bdd & err_bdd)
-    out_vars_cube = get_cube(get_controllable_vars_bdds())
-    exist_outs = (inv_impl_nerr & exist_tn__tau_and_dst).ExistAbstract(out_vars_cube)  # ∃o: inv->~err &  ∃t' tau(t,i,t',o)
-
-    inp_vars_bdds = get_uncontrollable_vars_bdds()
-    if inp_vars_bdds:
-        inp_vars_cube = get_cube(inp_vars_bdds)
-        forall_inputs = exist_outs.UnivAbstract(inp_vars_cube)  # ∀i ∃o: inv -> ..
-    else:
-        forall_inputs = exist_outs
-
-    return forall_inputs
+    return cudd.One()
 
 
 def calc_win_region(init_state_bdd, transition_bdd, inv_bdd, err_bdd, f_bdd):
@@ -329,27 +311,18 @@ def calc_win_region(init_state_bdd, transition_bdd, inv_bdd, err_bdd, f_bdd):
 
         gfp.Y lfp.X [F & pre_sys(Y)  |  pre_sys(X)]
 
+    Note that for Buchi game with invariants we use modified_pre_sys operator.
+    See docs for function `modified_pre_sys_bdd` and for more details visit
+    https://verify.iaik.tugraz.at/research/bin/view/Ausgewaehltekapitel/BuchiWithInvariantsAndSafety
+
     :return: BDD of the winning region
     """
 
     logger.info('calc_win_region..')
 
-    Y = cudd.One()
-    while True:  # gfp  # TODOopt: try algorithm from the Krish's lectures?
-        X = cudd.Zero()
-        while True:  # lfp
-            nX = (f_bdd & modified_pre_sys_bdd(Y, transition_bdd, inv_bdd, err_bdd)) \
-                    | modified_pre_sys_bdd(X, transition_bdd, inv_bdd, err_bdd)
-            if nX == X:
-                break
-            X = nX
+    logger.warn('IMPLEMENT ME')  # implement and use modifed_pre_sys (in lectures we call it Force)
 
-        nY = X
-        if nY == Y:
-            break
-        Y = nY
-
-    return Y
+    return cudd.One()
 
 
 def get_nondet_strategy(win_region_bdd, transition_bdd):
@@ -395,8 +368,6 @@ def extract_output_funcs(non_det_strategy, init_state_bdd, transition_bdd):
     """
 
     logger.info('extract_output_funcs..')
-
-    # XXX: damn, did we provide this in the last year?
 
     output_models = dict()
     controls = get_controllable_vars_bdds()
