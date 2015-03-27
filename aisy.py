@@ -20,10 +20,9 @@ To run:
 
 ./aisy.py -h
 
-Some self-testing functionality is included in ``run_status_tests.py``.
+Some self-testing functionality is included in `run_status_tests.py`.
 
-More extensive tests are provided by Robert in script ``performance_test.sh``.
-This script also runs model checker to check the results.
+More extensive tests will be provided in the benchmarking directory. It also runs model checker to check the results.
 
 More details you will find in the code, on web-page of the course.
 
@@ -364,6 +363,7 @@ def get_nondet_strategy(win_region_bdd, transition_bdd):
     """
 
     logger.info('get_nondet_strategy..')
+
     logger.warn('IMPLEMENT ME')
 
     strategy = cudd.Zero()
@@ -547,7 +547,7 @@ def walk(a_bdd):
     # but fake error latch will not be used in output functions (at least we don't need this..)
     a_lit = a_bdd.NodeReadIndex()
 
-    assert a_lit != bad_fake_latch.lit, 'using error latch in the definition of outputs is not allowed'
+    assert a_lit != fair_fake_latch.lit, 'smth went wrong: using fake latches in the definition of outputs'
 
     #: :type: DdNode
     t_bdd = a_bdd.T()
