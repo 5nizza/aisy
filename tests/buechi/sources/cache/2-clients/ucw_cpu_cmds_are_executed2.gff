@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<Structure label-on="Transition" type="FiniteStateAutomaton">
+    <Name/>
+    <Description/>
+    <Formula>~ ([] (CPUread2 --&gt; &lt;&gt; done2) /\ [] (CPUwrite2 --&gt; &lt;&gt; done))</Formula>
+    <Alphabet type="Propositional">
+        <Proposition>CPUread2</Proposition>
+        <Proposition>CPUwrite2</Proposition>
+        <Proposition>done2</Proposition>
+    </Alphabet>
+    <StateSet>
+        <State sid="0">
+            <Description>s0, 0</Description>
+            <Y>120</Y>
+            <X>100</X>
+            <Properties/>
+        </State>
+        <State sid="1">
+            <Description>s1, 1</Description>
+            <Y>120</Y>
+            <X>340</X>
+            <Properties/>
+        </State>
+    </StateSet>
+    <InitialStateSet>
+        <StateID>0</StateID>
+    </InitialStateSet>
+    <TransitionSet complete="false">
+        <Transition tid="8">
+            <From>0</From>
+            <To>1</To>
+            <Label>~CPUread2 CPUwrite2 ~done2</Label>
+            <Properties/>
+        </Transition>
+        <Transition tid="15">
+            <From>0</From>
+            <To>0</To>
+            <Label>True</Label>
+            <Properties/>
+        </Transition>
+        <Transition tid="16">
+            <From>0</From>
+            <To>1</To>
+            <Label>CPUread2 ~done2</Label>
+            <Properties/>
+        </Transition>
+        <Transition tid="17">
+            <From>1</From>
+            <To>1</To>
+            <Label>~done2</Label>
+            <Properties/>
+        </Transition>
+    </TransitionSet>
+    <Acc type="Buchi">
+        <StateID>1</StateID>
+    </Acc>
+    <Properties/>
+</Structure>

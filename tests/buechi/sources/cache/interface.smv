@@ -1,0 +1,54 @@
+MODULE main
+--<inputs>
+VAR
+  CPUread: boolean;
+  CPUwrite: boolean;
+  valueIn: boolean;
+--</inputs>
+
+--<outputs>
+VAR 
+  valueOut: boolean;
+  done: boolean;
+--</outputs>
+
+--<common definitions> used in the specs, goes last before spec
+DEFINE 
+  a := TRUE;
+  b := FALSE;
+
+  writtenA := CPUwrite & valueIn=a & done;
+  writtenB := CPUwrite & valueIn=b & done;
+  
+  readA := CPUread & valueOut=a & done;
+  readB := CPUread & valueOut=b & done;
+--</common definitions>
+
+SPEC
+1:
+  "CPU does not change commands until they are processed"
+  data=nbw_invariant_cpu_waits_done.gff
+  polarity=good trace
+  input_type=automaton
+  output_type=invariant
+
+2:
+  "All CPU commands are eventually executed"
+  data=ucw_cpu_cmds_are_executed.gff
+  polarity=bad trace
+  input_type=automaton
+  output_type=spec
+
+3:
+  "No simultaneous CPUread and CPUwrite"
+  data=nbw_invariant_read_or_write.gff
+  polarity=good trace
+  input_type=automaton
+  output_type=invariant
+
+4:
+  "Reads returns the last written value"
+  data=ucw_causal-reading.gff
+  polarity=bad trace
+  input_type=automaton
+  output_type=spec

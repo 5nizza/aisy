@@ -1,0 +1,1 @@
+translate QPTL -m ltl2ba -t nbw -o out_tmp.gff tmp.gff;

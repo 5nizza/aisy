@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<logic name="QPTL">
+    <name/>
+    <description/>
+    <formula>G(CPUread -&gt; F done) &amp; G(CPUwrite -&gt; F done)</formula>
+</logic>

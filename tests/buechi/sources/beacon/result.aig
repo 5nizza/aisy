@@ -1,0 +1,43 @@
+aag 26 1 6 0 19 0 1 0 1
+2
+4 4
+6 16
+8 8
+10 18
+12 38
+14 43
+52
+20
+16 5 3
+18 9 2
+20 15 13
+22 6 5
+24 14 13
+26 24 22
+28 10 9
+30 15 12
+32 30 28
+34 33 12
+36 35 27
+38 37 21
+40 27 14
+42 41 21
+44 6 4
+46 10 8
+48 14 12
+50 49 47
+52 50 45
+i0 controllable_beacon
+l0 sys_prop_spec2.state@1
+l1 sys_prop_spec2.state@0
+l2 sys_prop_spec1.state@1
+l3 sys_prop_spec1.state@0
+l4 sys_prop_counting_fairness.state@1
+l5 sys_prop_counting_fairness.state@0
+c0 AIGER_INVAR_0
+f0 AIGER_FAIR_0
+c
+smvtoaig
+1.9
+<stdin>
+
