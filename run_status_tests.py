@@ -6,16 +6,21 @@ from subprocess import call
 # change these two paths according to your setup
 
 # should be executable, to make it executable run: chmod +x ./aisy.py
-tool = "./aisy.py"
+tool = "./aisy.py -r"
 
-tests_dir = "./tests/"
+tests_dirs = ["./tests/safety/", "./tests/buechi/"]
 
 ############################################################################
 from aisy import EXIT_STATUS_REALIZABLE, EXIT_STATUS_UNREALIZABLE
 
 
-tests = sorted([tests_dir + '/' + f
-                for f in os.listdir(tests_dir) if f.endswith('.aag')])
+tests = []
+for td in tests_dirs:
+    tests.extend(sorted([td + '/' + f
+                        for f in os.listdir(td) if f.endswith('.aag')]))
+
+
+assert tests, 'not tests found'
 
 
 def cat(test):

@@ -1,4 +1,4 @@
-aag 4 2 1 1 1
+aag 4 2 1 0 1 1
 2
 4
 6 2
@@ -7,8 +7,6 @@ aag 4 2 1 1 1
 i0 i_r
 i1 controllable_g
 l0 r-latch
-o0 err
 c
 example1: r -> Xg
-
 realizable
