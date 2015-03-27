@@ -33,7 +33,7 @@ Email me in case questions/suggestions/bugs: ayrat.khalimov at gmail
 """
 
 status = ["TODO: 1) check the case when output functions depend on error fake latch\n"
-          "TODO: 2) optim: get rid of fake latches"]
+          "TODO: 2) optim: get rid of fake latches(?)"]
 
 
 import argparse
@@ -53,16 +53,12 @@ spec = None
 #: :type: DdManager
 cudd = None
 
-# Spec outputs (bad, invariant, fair (B,C,F)) can be latched or unlatched.
-# Latching them makes things look like in most online lectures.
+# Latching fair(t,i,o) signal makes things look like in most online lectures.
 # Let's emulate this by introducing a non-existing latch.
-# Note: none of outputs can depend on them. TODO: get rid of this
-#: :type: aiger_symbol
-bad_fake_latch = None
+# Note: none of outputs can depend on them. TODOfut: is using fair directly speed things up?
 #: :type: aiger_symbol
 fair_fake_latch = None
-#: :type: aiger_symbol
-inv_fake_latch = None
+fake_latches_introduced = False
 
 #: :type: Logger
 logger = None
@@ -92,61 +88,37 @@ def strip_lit(l):
     return l & ~1
 
 
-def introduce_error_latch_if():
-    global bad_fake_latch, inv_fake_latch, fair_fake_latch
+def introduce_fair_latch_if():
+    global fair_fake_latch, fake_latches_introduced
 
-    if bad_fake_latch:
-        return
+    if fake_latches_introduced:
+        return fair_fake_latch
+    fake_latches_introduced = True
 
-    assert not (spec.num_bad > 0 and spec.num_outputs > 0)
-    assert spec.num_bad <= 1, 'not supported yet'  # TODOfut
-    assert spec.num_fairness <= 1, 'not supported yet'
-    assert spec.num_constraints <= 1, 'not supported yet'
-
-    bad_symbol = None
-    if spec.num_outputs == 1:
-        bad_symbol = spec.outputs  # swig returns one element instead of array, to iterate over array use iterate_symbols
+    if spec.num_outputs > 0:
+        # (old) format version 1
+        assert 0, 'not implemented yet'
     else:
-        if spec.num_bad == 1:
-            bad_symbol = spec.bad
-
-    cur_maxvar = int(spec.maxvar)
-    if bad_symbol:
-        bad_fake_latch = aiger_symbol()
-
-        bad_fake_latch.lit = (cur_maxvar + 1) * 2
-        cur_maxvar += 1
-        bad_fake_latch.name = 'bad_fake_latch'
-        bad_fake_latch.next = bad_symbol.lit
-
-    if spec.num_fairness == 1:
+        # new version (in AKDV'15 we use this version)
         fair_symbol = spec.fairness
-
         fair_fake_latch = aiger_symbol()
-        fair_fake_latch.lit = (cur_maxvar + 1) * 2
-        cur_maxvar += 1
+        fair_fake_latch.lit = (int(spec.maxvar) + 1) * 2   # hm, many vairable indices in between are unused
         fair_fake_latch.name = 'fair_fake_latch'
-        fair_fake_latch.next = fair_symbol.lit
+        if spec.num_fairness == 1:
+            fair_fake_latch.next = fair_symbol.lit
+        else:  # TODOopt: for safety slightly inneficient since in the first tick the latch is zero
+            fair_fake_latch.next = 1  # True
 
-    if spec.num_fairness == 1:
-        inv_symbol = spec.constraints
-
-        inv_fake_latch = aiger_symbol()
-        inv_fake_latch.lit = (cur_maxvar + 1) * 2
-        cur_maxvar += 1
-        inv_fake_latch.name = 'inv_fake_latch'
-        inv_fake_latch.next = inv_symbol.lit
+    return fair_fake_latch
 
 
 def iterate_latches_and_error():
-    introduce_error_latch_if()
+    introduce_fair_latch_if()
 
     for i in range(int(spec.num_latches)):
         yield get_aiger_symbol(spec.latches, i)
 
-    for l in [bad_fake_latch, inv_fake_latch, fair_fake_latch]:
-        if l is not None:
-            yield l
+    yield fair_fake_latch
 
 
 def parse_into_spec(aiger_file_name):
@@ -158,13 +130,20 @@ def parse_into_spec(aiger_file_name):
     err = aiger_open_and_read_from_file(spec, aiger_file_name)
     assert not err, err
 
+    # assert there is no mix of formats
+    assert (spec.num_outputs == 1) ^ (spec.num_bad == 1 or spec.num_fairness == 1), 'mix of two formats'
+    assert spec.num_outputs + spec.num_fairness + spec.num_bad >= 1, 'no properties'
+    assert spec.num_bad <= 1 and \
+           spec.num_fairness <= 1 and spec.num_constraints <= 1 and spec.num_constraints <= 1, 'not supported yet'
+
+    assert spec.num_justice == 0, 'not supported'
+
 
 def get_lit_type(stripped_lit):
-    global bad_fake_latch, fair_fake_latch, inv_fake_latch
+    global fair_fake_latch
 
-    for l in [bad_fake_latch, inv_fake_latch, fair_fake_latch]:
-        if l and l.lit == stripped_lit:
-            return None, l, None
+    if fair_fake_latch and fair_fake_latch.lit == stripped_lit:
+        return None, fair_fake_latch, None
 
     input_ = aiger_is_input(spec, stripped_lit)
     latch_ = aiger_is_latch(spec, stripped_lit)
@@ -265,7 +244,7 @@ def get_controllable_vars_bdds():
     return _get_bdd_vars(lambda name: name.startswith('controllable'))
 
 
-def get_uncontrollable_output_bdds():
+def get_uncontrollable_vars_bdds():
     return _get_bdd_vars(lambda name: not name.startswith('controllable'))
 
 
@@ -308,66 +287,60 @@ def unprime_latches_in_bdd(bdd):
     return unprimed_bdd
 
 
-def pre_sys_bdd(dst_states_bdd, transition_bdd):
+def modified_pre_sys_bdd(dst_states_bdd, transition_bdd, inv_bdd, err_bdd):
     """
-    Calculate predecessor states of given states:
+    Calculate predecessor states of Dst(x') accounting for invariant and error transitions:
 
-         ∀i ∃o ∃t'  tau(t,i,t',o)
+         ∀i ∃o:
+           inv(t,i,o)  ->  ~err(t,i,o) & ∃t' tau(t,i,t',o) & Dst(t')
 
-    :return: BDD representation of predecessor states
-
-    :hints: if current states are not primed they should be primed before calculation (why?)
-    :hints: calculation of ``∃o t(a,b,o)`` using cudd: ``t.ExistAbstract(get_cube(o))``
-    :hints: calculation of ``∀i t(a,b,i)`` using cudd: ``t.UnivAbstract(get_cube(i))``
+    :return: BDD representation of the predecessor states
     """
 
-    #: :type: DdNode
-    transition_bdd = transition_bdd
     #: :type: DdNode
     primed_dst_states_bdd = prime_latches_in_bdd(dst_states_bdd)
 
     #: :type: DdNode
-    intersection = transition_bdd & primed_dst_states_bdd  # all predecessors (i.e., if sys and env cooperate)
+    tau_and_dst = transition_bdd & primed_dst_states_bdd  # all predecessors (i.e., if sys and env cooperate)
 
-    # cudd requires to create a cube first..
-    if len(get_controllable_vars_bdds()) != 0:
-        out_vars_cube_bdd = get_cube(get_controllable_vars_bdds())
-        exist_outs = intersection.ExistAbstract(out_vars_cube_bdd)  # ∃o tau(t,i,t',o)
-    else:
-        exist_outs = intersection
-
+    # cudd requires to create a cube first
     next_state_vars_cube = prime_latches_in_bdd(get_cube(get_all_latches_as_bdds()))
-    exist_next_state = exist_outs.ExistAbstract(next_state_vars_cube)  # ∃o ∃t'  tau(t,i,t',o)
+    exist_tn__tau_and_dst = tau_and_dst.ExistAbstract(next_state_vars_cube)  # ∃t'  tau(t,i,t',o) & dst(t')
 
-    uncontrollable_output_bdds = get_uncontrollable_output_bdds()
-    if uncontrollable_output_bdds:
-        in_vars_cube_bdd = get_cube(uncontrollable_output_bdds)
-        forall_inputs = exist_next_state.UnivAbstract(in_vars_cube_bdd)  # ∀i ∃o ∃t'  tau(t,i,t',o)
+    assert len(get_controllable_vars_bdds()) > 0  # TODOfut: without outputs make it model checker
+
+    inv_impl_nerr = ~(inv_bdd & err_bdd)
+    out_vars_cube = get_cube(get_controllable_vars_bdds())
+    exist_outs = (inv_impl_nerr & exist_tn__tau_and_dst).ExistAbstract(out_vars_cube)  # ∃o: inv->~err &  ∃t' tau(t,i,t',o)
+
+    inp_vars_bdds = get_uncontrollable_vars_bdds()
+    if inp_vars_bdds:
+        inp_vars_cube = get_cube(inp_vars_bdds)
+        forall_inputs = exist_outs.UnivAbstract(inp_vars_cube)  # ∀i ∃o: inv -> ..
     else:
-        forall_inputs = exist_next_state
+        forall_inputs = exist_outs
 
     return forall_inputs
 
 
-def calc_win_region(init_state_bdd, transition_bdd, not_error_bdd, inv_bdd, fair_bdd):
+def calc_win_region(init_state_bdd, transition_bdd, inv_bdd, err_bdd, f_bdd):
     """
-    Calculate a winning region for the buchi game:
+    Calculate a winning region for the Buchi game.
+    The win region for the Buchi game is:
 
         gfp.Y lfp.X [F & pre_sys(Y)  |  pre_sys(X)]
 
     :return: BDD of the winning region
     """
 
-    # CURRENT: add invariants, and bad
-
     logger.info('calc_win_region..')
 
     Y = cudd.One()
-    while True:   # TODO: optimize -- try algorithm from the Krish's lectures
+    while True:  # gfp  # TODOopt: try algorithm from the Krish's lectures?
         X = cudd.Zero()
-        while True:
-            nX = (fair_bdd & pre_sys_bdd(Y, transition_bdd)) \
-                    | pre_sys_bdd(X, transition_bdd)
+        while True:  # lfp
+            nX = (f_bdd & modified_pre_sys_bdd(Y, transition_bdd, inv_bdd, err_bdd)) \
+                    | modified_pre_sys_bdd(X, transition_bdd, inv_bdd, err_bdd)
             if nX == X:
                 break
             X = nX
@@ -382,26 +355,18 @@ def calc_win_region(init_state_bdd, transition_bdd, not_error_bdd, inv_bdd, fair
 
 def get_nondet_strategy(win_region_bdd, transition_bdd):
     """ Get non-deterministic strategy from the winning region.
-    If the system outputs controllable values that satisfy this non-deterministic strategy, then the system wins.
-    I.e., a non-deterministic strategy describes for each state all possible plausible output values:
-
-    ``strategy(x,i,c) = ∃x' W(x) & T(x,i,c,x') & W(x') ``
-
-    (Why system cannot lose if adhere to this strategy?)
+    If the system outputs controllable values that satisfy this non-deterministic strategy,
+    then the system wins. Thus, a non-deterministic strategy describes for each state all
+    plausible output values.
 
     :return: non deterministic strategy bdd
-    :note: The strategy is still not-deterministic. Determinization step is done later.
+    :note: The strategy is not-deterministic -- determinization step is done later.
     """
 
     logger.info('get_nondet_strategy..')
+    logger.warn('IMPLEMENT ME')
 
-    #: :type: DdNode
-    primed_win_region_bdd = prime_latches_in_bdd(win_region_bdd)
-    # TODO: use more efficient exist_and
-    intersection = (win_region_bdd & primed_win_region_bdd & transition_bdd)
-
-    next_vars_cube = prime_latches_in_bdd(get_cube(get_all_latches_as_bdds()))
-    strategy = intersection.ExistAbstract(next_vars_cube)
+    strategy = cudd.Zero()
 
     return strategy
 
@@ -430,6 +395,8 @@ def extract_output_funcs(non_det_strategy, init_state_bdd, transition_bdd):
     """
 
     logger.info('extract_output_funcs..')
+
+    # XXX: damn, did we provide this in the last year?
 
     output_models = dict()
     controls = get_controllable_vars_bdds()
@@ -477,6 +444,25 @@ def extract_output_funcs(non_det_strategy, init_state_bdd, transition_bdd):
     return output_models
 
 
+def get_inv_err_f_bdds():
+    f_bdd = get_bdd_for_value(introduce_fair_latch_if().lit)
+
+    global spec, cudd
+    if spec.num_constraints == 0:
+        inv_bdd = cudd.One()
+    else:
+        inv_sym = spec.constraints  # swig returns the first element instead of array-like
+        inv_bdd = get_bdd_for_value(inv_sym.lit)
+
+    if spec.num_bad == 0:
+        err_bdd = cudd.Zero()
+    else:
+        err_sym = spec.bad  # swig returns the first element instead of array-like
+        err_bdd = get_bdd_for_value(err_sym.lit)
+
+    return inv_bdd, err_bdd, f_bdd
+
+
 def synthesize(realiz_check):
     """ Calculate winning region and extract output functions.
 
@@ -487,13 +473,14 @@ def synthesize(realiz_check):
 
     #: :type: DdNode
     init_state_bdd = compose_init_state_bdd()
+    # init_state_bdd.PrintMinterm()
     #: :type: DdNode
     transition_bdd = compose_transition_bdd()
     # transition_bdd.PrintMinterm()
 
-    #: :type: DdNode
-    not_error_bdd = ~get_bdd_for_value(bad_fake_latch.lit)
-    win_region = calc_win_region(init_state_bdd, transition_bdd, not_error_bdd)
+    inv_bdd, err_bdd, f_bdd = get_inv_err_f_bdds()
+
+    win_region = calc_win_region(init_state_bdd, transition_bdd, inv_bdd, err_bdd, f_bdd)
 
     if win_region == cudd.Zero():
         return False, None
@@ -709,3 +696,4 @@ if __name__ == '__main__':
     logger.info(['unrealizable', 'realizable'][is_realizable])
 
     exit([EXIT_STATUS_UNREALIZABLE, EXIT_STATUS_REALIZABLE][is_realizable])
+    # XXX: the git history can also contain some implemented things
