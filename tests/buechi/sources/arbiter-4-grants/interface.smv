@@ -1,0 +1,49 @@
+MODULE main
+
+-- <inputs>
+VAR
+  r: boolean;
+  cancel: boolean;
+  four: boolean;
+-- </inputs>
+
+-- <outputs>
+VAR
+  g: boolean;
+-- </outputs>
+
+SPEC
+1: 
+  "Every reguest is granted unless cancelled"
+  data=dbw-every-request-is-granted.gff
+  polarity=good trace
+  input_type=automaton
+  output_type=spec
+
+2: 
+  "no spurious grants: initial"
+  data=ucw-no-spurious-grants-initial.gff
+  polarity=bad trace
+  input_type=automaton
+  output_type=spec
+
+3: 
+  "no spurious grants"
+  data = ucw-no-spurious-grants.gff
+  polarity=bad trace
+  input_type=automaton
+  output_type=spec
+
+4: 
+  "grant is lowered eventually"
+  data = dbw-grant-is-lowered-finally.gff
+  polarity=good trace
+  input_type=automaton
+  output_type=spec
+
+5:
+  "grant is given for four ticks"
+  data = dbw-partial-impl-four-grants.gff
+  polarity=good trace
+  input_type=automaton
+  output_type = spec

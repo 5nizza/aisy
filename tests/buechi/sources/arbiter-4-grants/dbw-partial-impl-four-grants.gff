@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<Structure label-on="Transition" type="FiniteStateAutomaton">
+    <Name/>
+    <Description/>
+    <Formula/>
+    <Alphabet type="Propositional">
+        <Proposition>four</Proposition>
+        <Proposition>g</Proposition>
+        <Proposition>r</Proposition>
+        <Proposition>siz</Proposition>
+    </Alphabet>
+    <StateSet>
+        <State sid="6">
+            <Y>140</Y>
+            <X>40</X>
+            <Properties/>
+        </State>
+        <State sid="7">
+            <Y>140</Y>
+            <X>160</X>
+            <Properties/>
+        </State>
+        <State sid="8">
+            <Y>140</Y>
+            <X>300</X>
+            <Properties/>
+        </State>
+        <State sid="9">
+            <Y>260</Y>
+            <X>300</X>
+            <Properties/>
+        </State>
+        <State sid="10">
+            <Y>260</Y>
+            <X>160</X>
+            <Properties/>
+        </State>
+    </StateSet>
+    <InitialStateSet>
+        <StateID>6</StateID>
+    </InitialStateSet>
+    <TransitionSet complete="false">
+        <Transition tid="35">
+            <From>6</From>
+            <To>7</To>
+            <Label>four ~g</Label>
+            <Properties/>
+        </Transition>
+        <Transition tid="36">
+            <From>7</From>
+            <To>7</To>
+            <Label>~g</Label>
+            <Properties/>
+        </Transition>
+        <Transition tid="37">
+            <From>7</From>
+            <To>8</To>
+            <Label>g</Label>
+            <Properties/>
+        </Transition>
+        <Transition tid="38">
+            <From>8</From>
+            <To>9</To>
+            <Label>g</Label>
+            <Properties/>
+        </Transition>
+        <Transition tid="39">
+            <From>9</From>
+            <To>10</To>
+            <Label>g</Label>
+            <Properties/>
+        </Transition>
+        <Transition tid="41">
+            <From>10</From>
+            <To>6</To>
+            <Label>g</Label>
+            <Properties/>
+        </Transition>
+        <Transition tid="42">
+            <From>6</From>
+            <To>6</To>
+            <Label>~four</Label>
+            <Properties/>
+        </Transition>
+        <Transition tid="43">
+            <From>6</From>
+            <To>8</To>
+            <ControlPointX>157.0</ControlPointX>
+            <Label>four g</Label>
+            <ControlPointY>-33.0</ControlPointY>
+            <Properties/>
+        </Transition>
+    </TransitionSet>
+    <Acc type="Buchi">
+        <StateID>6</StateID>
+        <StateID>7</StateID>
+        <StateID>8</StateID>
+        <StateID>9</StateID>
+        <StateID>10</StateID>
+    </Acc>
+    <Properties/>
+</Structure>

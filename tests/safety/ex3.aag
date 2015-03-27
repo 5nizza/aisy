@@ -1,0 +1,14 @@
+aag 6 2 1 0 3 1
+2
+4
+6 2
+13
+8 6 5
+10 7 4
+12 9 11
+i0 i_r
+i1 controllable_g
+l0 r-latch
+c
+example3: r -> Xg ^ !r -> X!g
+realizable

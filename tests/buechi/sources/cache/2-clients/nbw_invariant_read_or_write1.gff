@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<Structure label-on="Transition" type="FiniteStateAutomaton">
+    <Name/>
+    <Description/>
+    <Formula>~ [] ~ (CPUread1 /\ CPUwrite1)</Formula>
+    <Alphabet type="Propositional">
+        <Proposition>CPUread1</Proposition>
+        <Proposition>CPUwrite1</Proposition>
+    </Alphabet>
+    <StateSet>
+        <State sid="0">
+            <Description>s0, 0</Description>
+            <Y>131</Y>
+            <X>96</X>
+            <Properties/>
+        </State>
+    </StateSet>
+    <InitialStateSet>
+        <StateID>0</StateID>
+    </InitialStateSet>
+    <TransitionSet complete="true">
+        <Transition tid="14">
+            <From>0</From>
+            <To>0</To>
+            <Label>~CPUread1 CPUwrite1</Label>
+            <Properties/>
+        </Transition>
+        <Transition tid="15">
+            <From>0</From>
+            <To>0</To>
+            <Label>~CPUread1 ~CPUwrite1</Label>
+            <Properties/>
+        </Transition>
+        <Transition tid="16">
+            <From>0</From>
+            <To>0</To>
+            <Label>CPUread1 ~CPUwrite1</Label>
+            <Properties/>
+        </Transition>
+    </TransitionSet>
+    <Acc type="Buchi">
+        <StateID>0</StateID>
+    </Acc>
+    <Properties/>
+</Structure>

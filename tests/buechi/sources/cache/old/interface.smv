@@ -1,0 +1,50 @@
+MODULE main
+VAR --inputs
+  CPUread: boolean;
+  CPUwrite: boolean;
+  valueIn: boolean;
+
+VAR --outputs
+  valueOut: boolean;
+  done: boolean;
+
+VAR --other needed variables
+
+DEFINE --definitions used in the specs
+  a := TRUE;
+  b := FALSE;
+
+  writtenA := CPUwrite & valueIn=a & done;
+  writtenB := CPUwrite & valueIn=b & done;
+  
+  readA := CPUread & valueOut=a & done;
+  readB := CPUread & valueOut=b & done;
+
+SPEC
+1:
+  "CPU does not change commands until they are processed"
+  data=invariant(ucw)_cpu_waits_done.gff
+  input_type=automaton
+  polarity=bad trace
+  output_type=invariant
+
+2:
+  "All CPU commands are eventually executed"
+  data=pos_qptl_cpu_cmds_are_executed.gff
+  input_type=qptl
+  polarity=good trace
+  output_type=spec
+
+3:
+  "No simultaneous CPUread and CPUwrite"
+  data=pos_qptl_invariant_read_or_write.gff
+  input_type=qptl
+  polarity=good trace
+  output_type=invariant
+
+4:
+  "Reads returns the last written value"
+  data=ucw_causal-reading.gff
+  polarity=bad trace
+  input_type=automaton
+  output_type=spec

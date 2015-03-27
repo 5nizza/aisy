@@ -1,0 +1,26 @@
+never {
+s15_init:
+    if
+    :: (writtenA) -> goto s12
+    :: (1) -> goto s15_init
+    :: (writtenB) -> goto s17
+    fi;
+s12:
+    if
+    :: !(writtenA) && !(writtenB) -> goto s12
+    :: (readB) -> goto accept_s11
+    fi;
+s17:
+    if
+    :: !(writtenA) && !(writtenB) -> goto s17
+    :: (readA) -> goto accept_s19
+    fi;
+accept_s11:
+    if
+    :: (1) -> goto accept_s11
+    fi;
+accept_s19:
+    if
+    :: (1) -> goto accept_s19
+    fi;
+}

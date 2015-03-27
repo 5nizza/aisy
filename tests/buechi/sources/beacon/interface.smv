@@ -1,0 +1,26 @@
+MODULE main
+--<inputs>
+--</inputs>
+
+--<outputs>
+VAR 
+  beacon: boolean;
+--</outputs>
+
+--<common definitions> used in the specs, goes last before spec
+--</common definitions>
+
+SPEC
+1:
+  "Inf often high"
+  data=inf_often_high.gff
+  polarity=good trace
+  input_type=automaton
+  output_type=spec
+
+2:
+  "Inf often high"
+  data=inf_often_low.gff
+  polarity=good trace
+  input_type=automaton
+  output_type=spec

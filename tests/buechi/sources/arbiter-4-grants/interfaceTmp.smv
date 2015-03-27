@@ -1,0 +1,28 @@
+MODULE main
+
+-- <inputs>
+VAR
+  r: boolean;
+  cancel: boolean;
+  four: boolean;
+-- </inputs>
+
+-- <outputs>
+VAR
+  g: boolean;
+-- </outputs>
+
+SPEC
+2: 
+  "no spurious grants: initial"
+  data=ucw-no-spurious-grants-initial.gff
+  polarity=bad trace
+  input_type=automaton
+  output_type=spec
+
+3: 
+  "no spurious grants"
+  data = ucw-no-spurious-grants.gff
+  polarity=bad trace
+  input_type=automaton
+  output_type=spec

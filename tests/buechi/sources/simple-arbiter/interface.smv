@@ -1,0 +1,37 @@
+MODULE main
+--<inputs>
+VAR
+  r1: boolean;
+  r2: boolean;
+--</inputs>
+
+--<outputs>
+VAR 
+  g1: boolean;
+  g2: boolean;
+--</outputs>
+
+--<common definitions> used in the specs, goes last before spec
+--</common definitions>
+
+SPEC
+1:
+  "G(r1->Fg1)"
+  data=req_is_granted.gff
+  polarity=good trace
+  input_type=automaton
+  output_type=spec
+
+2:
+  "G(r2->Fg2)"
+  data=req_is_granted2.gff
+  polarity=good trace
+  input_type=automaton
+  output_type=spec
+
+3:
+  "~G(g1 & g2)"
+  data=mut_exclusion.gff
+  polarity=bad trace
+  input_type=automaton
+  output_type=spec
