@@ -374,21 +374,22 @@ def get_nondet_strategy(attractors, transition_bdd, inv_bdd, err_bdd):
     src_dst_pairs = [(i, (i-1)%len(attractors))
                      for i in range(len(attractors))]
 
+    assert 0, 'wrong, reimplement'
+    # #
+    # # ⋀_(Src,Dst): Src(t) -> modified_pre_sys(Dst(t'))
+    # #
     #
-    # ⋀_(Src,Dst): Src(t) -> modified_pre_sys(Dst(t'))
+    # src_dst_conjuncts = cudd.One()
+    # for (src_i,dst_i) in src_dst_pairs:
+    #     src, dst = attractors[src_i], attractors[dst_i]
     #
-
-    src_dst_conjuncts = cudd.One()
-    for (src_i,dst_i) in src_dst_pairs:
-        src, dst = attractors[src_i], attractors[dst_i]
-
-        assert len(get_controllable_vars_bdds()) > 0
-
-        primed_dst_states_bdd = prime_latches_in_bdd(dst)
-
-        src_impl_modpre = ~src | modified_pre_sys_bdd(primed_dst_states_bdd, transition_bdd, inv_bdd, err_bdd)
-
-        src_dst_conjuncts = src_dst_conjuncts & src_impl_modpre
+    #     assert len(get_controllable_vars_bdds()) > 0
+    #
+    #     primed_dst_states_bdd = prime_latches_in_bdd(dst)
+    #
+    #     src_impl_modpre = ~src | modified_pre_sys_bdd(primed_dst_states_bdd, transition_bdd, inv_bdd, err_bdd)
+    #
+    #     src_dst_conjuncts = src_dst_conjuncts & src_impl_modpre
 
     return src_dst_conjuncts
 
