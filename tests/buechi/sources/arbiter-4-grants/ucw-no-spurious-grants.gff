@@ -12,18 +12,23 @@
     </Alphabet>
     <StateSet>
         <State sid="0">
-            <Y>191</Y>
-            <X>332</X>
+            <X>320</X>
+            <Y>200</Y>
             <Properties/>
         </State>
         <State sid="1">
-            <Y>191</Y>
-            <X>208</X>
+            <X>200</X>
+            <Y>200</Y>
             <Properties/>
         </State>
         <State sid="2">
-            <Y>191</Y>
-            <X>96</X>
+            <X>100</X>
+            <Y>200</Y>
+            <Properties/>
+        </State>
+        <State sid="4">
+            <X>440</X>
+            <Y>200</Y>
             <Properties/>
         </State>
     </StateSet>
@@ -40,19 +45,13 @@
         <Transition tid="4">
             <From>1</From>
             <To>1</To>
-            <Label>~g ~r</Label>
+            <Label>g</Label>
             <Properties/>
         </Transition>
         <Transition tid="5">
             <From>1</From>
             <To>0</To>
-            <Label>g ~r</Label>
-            <Properties/>
-        </Transition>
-        <Transition tid="9">
-            <From>0</From>
-            <To>0</To>
-            <Label>True</Label>
+            <Label>~g ~r</Label>
             <Properties/>
         </Transition>
         <Transition tid="10">
@@ -61,9 +60,27 @@
             <Label>True</Label>
             <Properties/>
         </Transition>
+        <Transition tid="11">
+            <From>0</From>
+            <To>0</To>
+            <Label>~g ~r</Label>
+            <Properties/>
+        </Transition>
+        <Transition tid="12">
+            <From>0</From>
+            <To>4</To>
+            <Label>g ~r</Label>
+            <Properties/>
+        </Transition>
+        <Transition tid="13">
+            <From>4</From>
+            <To>4</To>
+            <Label>True</Label>
+            <Properties/>
+        </Transition>
     </TransitionSet>
     <Acc type="Buchi">
-        <StateID>0</StateID>
+        <StateID>4</StateID>
     </Acc>
     <Properties/>
 </Structure>

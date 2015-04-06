@@ -39,23 +39,22 @@ def is_realizable(test):
     assert 0, 'spec status is unknown'
 
 
-if __name__ == "__main__":
-    for t in tests:
-        print 'running ' + tool + ' ' + t
-        res = call(tool + ' ' + t, shell=True)
+for t in tests:
+    print 'running ' + tool + ' ' + t
+    res = call(tool + ' ' + t, shell=True)
 
-        assert res in [EXIT_STATUS_REALIZABLE, EXIT_STATUS_UNREALIZABLE], 'unknown status: ' + str(res)
+    assert res in [EXIT_STATUS_REALIZABLE, EXIT_STATUS_UNREALIZABLE], 'unknown status: ' + str(res)
 
-        if res == EXIT_STATUS_REALIZABLE and not is_realizable(t):
-            print
-            print t
-            print 'FAILED: should be unrealizable: tool found it realizable. hm.'.format(test=t)
-            exit(1)
+    if res == EXIT_STATUS_REALIZABLE and not is_realizable(t):
+        print
+        print t
+        print 'FAILED: should be unrealizable: the tool found it realizable. hm.'.format(test=t)
+        exit(1)
 
-        if res == EXIT_STATUS_UNREALIZABLE and is_realizable(t):
-            print
-            print t
-            print 'FAILED: should be realizable: tool found it unrealizable. hm.'
-            exit(1)
+    if res == EXIT_STATUS_UNREALIZABLE and is_realizable(t):
+        print
+        print t
+        print 'FAILED: should be realizable: tool found it unrealizable. hm.'
+        exit(1)
 
-    print 'ALL TESTS PASSED'
+print 'ALL TESTS PASSED'
