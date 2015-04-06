@@ -1,3 +1,4 @@
+#!/usr/bin/env python2.7
 # coding=utf-8
 
 """
@@ -211,9 +212,6 @@ def compose_transition_bdd():
 
         transition &= latch_transition
 
-    # print('final transition BDD is')
-    # transition.PrintMinterm()
-
     return transition
 
 
@@ -287,7 +285,7 @@ def unprime_latches_in_bdd(bdd):
 
 def modified_pre_sys_bdd(dst_states_bdd, transition_bdd, inv_bdd, err_bdd):
     """
-    Calculate predecessor states of Dst(x') accounting for invariant and error transitions:
+    Calculate predecessor states of Dst(t') accounting for invariant and error transitions:
 
          ∀i ∃o:
            inv(t,i,o)  ->  ~err(t,i,o) & ∃t' tau(t,i,t',o) & Dst(t')
@@ -296,12 +294,33 @@ def modified_pre_sys_bdd(dst_states_bdd, transition_bdd, inv_bdd, err_bdd):
 
     :hint: A normal version called `pre_sys_bdd` that does not account for invariants and err signals can be found here:
     https://bitbucket.org/art_haali/aisy-classroom/src/95baf6e8a02e92d02c2fce1749f8468cadc5e704/aisy.py
-    Use it as inspiration/documentation of how to use cudd.
+    Use it as an inspiration/documentation of how to use cudd.
     """
 
-    logger.warn('IMPLEMENT ME')
+    #: :type: DdNode
+    primed_dst_states_bdd = prime_latches_in_bdd(dst_states_bdd)
 
-    return cudd.One()
+    #: :type: DdNode
+    tau_and_dst = transition_bdd & primed_dst_states_bdd  # all predecessors (i.e., if sys and env cooperate)
+
+    # cudd requires to create a cube first
+    next_state_vars_cube = prime_latches_in_bdd(get_cube(get_all_latches_as_bdds()))
+    exist_tn__tau_and_dst = tau_and_dst.ExistAbstract(next_state_vars_cube)  # ∃t'  tau(t,i,t',o) & dst(t')
+
+    assert len(get_controllable_vars_bdds()) > 0  # TODOfut: without outputs make it model checker
+
+    inv_impl_nerr = ~(inv_bdd & err_bdd)
+    out_vars_cube = get_cube(get_controllable_vars_bdds())
+    exist_outs = (inv_impl_nerr & exist_tn__tau_and_dst).ExistAbstract(out_vars_cube)  # ∃o: inv->~err &  ∃t' tau(t,i,t',o)
+
+    inp_vars_bdds = get_uncontrollable_vars_bdds()
+    if inp_vars_bdds:
+        inp_vars_cube = get_cube(inp_vars_bdds)
+        forall_inputs = exist_outs.UnivAbstract(inp_vars_cube)  # ∀i ∃o: inv -> ..
+    else:
+        forall_inputs = exist_outs
+
+    return forall_inputs
 
 
 def calc_win_region(init_state_bdd, transition_bdd, inv_bdd, err_bdd, f_bdd):
@@ -312,7 +331,7 @@ def calc_win_region(init_state_bdd, transition_bdd, inv_bdd, err_bdd, f_bdd):
         gfp.Y lfp.X [F & pre_sys(Y)  |  pre_sys(X)]
 
     Note that for Buchi game with invariants we use modified_pre_sys operator.
-    See docs for function `modified_pre_sys_bdd` and for more details visit
+    To see docs for function `modified_pre_sys_bdd` and for more details visit
     https://verify.iaik.tugraz.at/research/bin/view/Ausgewaehltekapitel/BuchiWithInvariantsAndSafety
 
     :return: BDD of the winning region
@@ -320,9 +339,20 @@ def calc_win_region(init_state_bdd, transition_bdd, inv_bdd, err_bdd, f_bdd):
 
     logger.info('calc_win_region..')
 
-    logger.warn('IMPLEMENT ME')  # implement and use modifed_pre_sys (in lectures we call it Force)
+    Y = cudd.One()
+    while True:  # gfp  # TODOopt: try algorithm from the Krish's lectures?
+        X = cudd.Zero()
+        while True:  # lfp
+            nX = (f_bdd & modified_pre_sys_bdd(Y, transition_bdd, inv_bdd, err_bdd)) \
+                 | modified_pre_sys_bdd(X, transition_bdd, inv_bdd, err_bdd)
+            if nX == X:
+                break
+            X = nX
 
-    return cudd.One()
+        nY = X
+        if nY == Y:
+            return Y
+        Y = nY
 
 
 def get_nondet_strategy(win_region_bdd, transition_bdd):
@@ -453,7 +483,7 @@ def synthesize(realiz_check):
 
     win_region = calc_win_region(init_state_bdd, transition_bdd, inv_bdd, err_bdd, f_bdd)
 
-    if win_region == cudd.Zero():
+    if win_region & init_state_bdd == cudd.Zero():
         return False, None
 
     if realiz_check:
@@ -590,7 +620,7 @@ def init_cudd():
     #CUDD_REORDER_LINEAR_CONVERGE,
     #CUDD_REORDER_LAZY_SIFT,
     #CUDD_REORDER_EXACT
-    # cudd.AutodynEnable(4)
+    #cudd.AutodynEnable(4)
     # cudd.AutodynDisable()
     # cudd.EnableReorderingReporting()
 
