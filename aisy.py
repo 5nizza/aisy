@@ -41,7 +41,7 @@ import pycudd
 import sys
 from aiger_swig.aiger_wrap import *
 
-#don't change status numbers since they are used by the performance script
+# don't change status numbers since they are used by the performance script
 EXIT_STATUS_REALIZABLE = 10
 EXIT_STATUS_UNREALIZABLE = 20
 
@@ -334,13 +334,15 @@ def calc_win_region(init_state_bdd, transition_bdd, inv_bdd, err_bdd, f_bdd):
     To see docs for function `modified_pre_sys_bdd` and for more details visit
     https://verify.iaik.tugraz.at/research/bin/view/Ausgewaehltekapitel/BuchiWithInvariantsAndSafety
 
-    :return: BDD of the winning region
+    :return: list of BDDs [Recur(F), Force1(Recur(F)), Force2(Recur(F)), ...],
+             thus, [..][-1] is the winning region
     """
 
     logger.info('calc_win_region..')
 
     Y = cudd.One()
     while True:  # gfp  # TODOopt: try algorithm from the Krish's lectures?
+        attractors = [Y & f_bdd]
         X = cudd.Zero()
         while True:  # lfp
             nX = (f_bdd & modified_pre_sys_bdd(Y, transition_bdd, inv_bdd, err_bdd)) \
@@ -348,18 +350,20 @@ def calc_win_region(init_state_bdd, transition_bdd, inv_bdd, err_bdd, f_bdd):
             if nX == X:
                 break
             X = nX
+            attractors.append(nX)
 
         nY = X
         if nY == Y:
-            return Y
+            return attractors
         Y = nY
 
 
-def get_nondet_strategy(win_region_bdd, transition_bdd):
-    """ Get non-deterministic strategy from the winning region.
-    If the system outputs controllable values that satisfy this non-deterministic strategy,
-    then the system wins. Thus, a non-deterministic strategy describes for each state all
-    plausible output values.
+def get_nondet_strategy(attractors, transition_bdd, inv_bdd, err_bdd):
+    """ Calculate the non-deterministic strategy for the given winning region (or the attractors for Buchi games).
+    The non-deterministic strategy is the set of triples `(t,i,o)` s.t.
+    if, for given `t,i` the system outputs any value `o` for which `(t,i,o)` is in the set,
+    then the system wins.
+    Thus, a non-deterministic strategy describes, for each state and input, all winning output values.
 
     :return: non deterministic strategy bdd
     :note: The strategy is not-deterministic -- determinization step is done later.
@@ -367,11 +371,26 @@ def get_nondet_strategy(win_region_bdd, transition_bdd):
 
     logger.info('get_nondet_strategy..')
 
-    logger.warn('IMPLEMENT ME')
+    src_dst_pairs = [(i, (i-1)%len(attractors))
+                     for i in range(len(attractors))]
 
-    strategy = cudd.Zero()
+    #
+    # ⋀_(Src,Dst): Src(t) -> modified_pre_sys(Dst(t'))
+    #
 
-    return strategy
+    src_dst_conjuncts = cudd.One()
+    for (src_i,dst_i) in src_dst_pairs:
+        src, dst = attractors[src_i], attractors[dst_i]
+
+        assert len(get_controllable_vars_bdds()) > 0
+
+        primed_dst_states_bdd = prime_latches_in_bdd(dst)
+
+        src_impl_modpre = ~src | modified_pre_sys_bdd(primed_dst_states_bdd, transition_bdd, inv_bdd, err_bdd)
+
+        src_dst_conjuncts = src_dst_conjuncts & src_impl_modpre
+
+    return src_dst_conjuncts
 
 
 def compose_init_state_bdd():
@@ -464,6 +483,21 @@ def get_inv_err_f_bdds():
     return inv_bdd, err_bdd, f_bdd
 
 
+def assert_increasing(attractors):   # TODOopt: debug only
+    previous = cudd.Zero()
+    for a in attractors:
+        if not previous.Leq(a):
+            logger.error('attractors are not increasing')
+            print 'a:'
+            a.PrintMinterm()
+            print 'previous'
+            previous.PrintMinterm()
+
+            assert 0
+
+        previous = a
+
+
 def synthesize(realiz_check):
     """ Calculate winning region and extract output functions.
 
@@ -481,15 +515,16 @@ def synthesize(realiz_check):
 
     inv_bdd, err_bdd, f_bdd = get_inv_err_f_bdds()
 
-    win_region = calc_win_region(init_state_bdd, transition_bdd, inv_bdd, err_bdd, f_bdd)
+    attractors = calc_win_region(init_state_bdd, transition_bdd, inv_bdd, err_bdd, f_bdd)
+    assert_increasing(attractors)
 
-    if win_region & init_state_bdd == cudd.Zero():
+    if attractors[-1] & init_state_bdd == cudd.Zero():
         return False, None
 
     if realiz_check:
         return True, None
 
-    non_det_strategy = get_nondet_strategy(win_region, transition_bdd)
+    non_det_strategy = get_nondet_strategy(attractors, transition_bdd, inv_bdd, err_bdd)
 
     func_by_var = extract_output_funcs(non_det_strategy, init_state_bdd, transition_bdd)
 
