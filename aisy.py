@@ -365,6 +365,7 @@ def get_nondet_strategy(attractors, transition_bdd, inv_bdd, err_bdd):
     then the system wins.
     Thus, a non-deterministic strategy describes, for each state and input, all winning output values.
 
+    :arg:attractors should be in increasing order
     :return: non deterministic strategy bdd
     :note: The strategy is not-deterministic -- determinization step is done later.
     """
@@ -374,24 +375,27 @@ def get_nondet_strategy(attractors, transition_bdd, inv_bdd, err_bdd):
     src_dst_pairs = [(i, (i-1)%len(attractors))
                      for i in range(len(attractors))]
 
-    assert 0, 'wrong, reimplement'
-    # #
-    # # ⋀_(Src,Dst): Src(t) -> modified_pre_sys(Dst(t'))
-    # #
-    #
-    # src_dst_conjuncts = cudd.One()
-    # for (src_i,dst_i) in src_dst_pairs:
-    #     src, dst = attractors[src_i], attractors[dst_i]
-    #
-    #     assert len(get_controllable_vars_bdds()) > 0
-    #
-    #     primed_dst_states_bdd = prime_latches_in_bdd(dst)
-    #
-    #     src_impl_modpre = ~src | modified_pre_sys_bdd(primed_dst_states_bdd, transition_bdd, inv_bdd, err_bdd)
-    #
-    #     src_dst_conjuncts = src_dst_conjuncts & src_impl_modpre
+    # inv(t,i,o) ->
+    #   ~err(t,i,o) & (⋀_(Src,Dst): Src(t) -> ∃t' tau(t,i,t',o) & Dst(t'))
 
-    return src_dst_conjuncts
+    src_dst_conjuncts = cudd.One()
+    for (src_i, dst_i) in src_dst_pairs:
+        src, dst = attractors[src_i], attractors[dst_i]
+
+        assert len(get_controllable_vars_bdds()) > 0
+
+        dstP = prime_latches_in_bdd(dst)
+        tP = prime_latches_in_bdd(get_cube(get_all_latches_as_bdds()))
+
+        exists_tP__tau_and_dstP = (transition_bdd & dstP).ExistAbstract(tP)  # ∃t' tau(t,i,t',o) & Dst(t'))
+
+        src_impl_dst = ~src | exists_tP__tau_and_dstP
+
+        src_dst_conjuncts = src_dst_conjuncts & src_impl_dst
+
+    result = ~inv_bdd | (err_bdd & src_dst_conjuncts)
+
+    return result
 
 
 def compose_init_state_bdd():
@@ -411,10 +415,11 @@ def compose_init_state_bdd():
 
 def extract_output_funcs(non_det_strategy, init_state_bdd, transition_bdd):
     """
-    Calculate BDDs for output functions given a non-deterministic winning strategy.
-    Cofactor-based approach.
+    From a given non-deterministic strategy (the set of triples `(x,i,o)`),
+    for each output variable `o`, calculate the set of pairs `(x,i)` where `o` will hold.
+    There are different ways -- here we use cofactor-based approach.
 
-    :return: dictionary ``controllable_variable_bdd -> func_bdd``
+    :return: dictionary `controllable_variable_bdd -> func_bdd`
     """
 
     logger.info('extract_output_funcs..')
@@ -438,7 +443,7 @@ def extract_output_funcs(non_det_strategy, init_state_bdd, transition_bdd):
         can_be_false = c_arena.Cofactor(~c)
 
         # We need to intersect with can_be_true to narrow the search.
-        # Negation can cause including states from !W (with err=1)
+        # Negation can cause including states from !W
         #: :type: DdNode
         must_be_true = (~can_be_false) & can_be_true
         must_be_false = (~can_be_true) & can_be_false
