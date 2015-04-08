@@ -2,6 +2,9 @@ aiger_swig/aiger_wrap.*
 
 *.py[cod]
 
+# vim
+*.swp
+
 # C extensions
 *.so
 *.o
