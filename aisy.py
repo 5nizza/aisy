@@ -323,7 +323,7 @@ def modified_pre_sys_bdd(dst_states_bdd, transition_bdd, inv_bdd, err_bdd):
     return forall_inputs
 
 
-def calc_win_region(init_state_bdd, transition_bdd, inv_bdd, err_bdd, f_bdd):
+def calc_win_region(transition_bdd, inv_bdd, err_bdd, f_bdd):
     """
     Calculate a winning region for the Buchi game.
     The win region for the Buchi game is:
@@ -393,7 +393,7 @@ def get_nondet_strategy(attractors, transition_bdd, inv_bdd, err_bdd):
 
         src_dst_conjuncts = src_dst_conjuncts & src_impl_dst
 
-    result = ~inv_bdd | (err_bdd & src_dst_conjuncts)
+    result = ~inv_bdd | (~err_bdd & src_dst_conjuncts)
 
     return result
 
@@ -521,7 +521,7 @@ def synthesize(realiz_check):
 
     inv_bdd, err_bdd, f_bdd = get_inv_err_f_bdds()
 
-    attractors = calc_win_region(init_state_bdd, transition_bdd, inv_bdd, err_bdd, f_bdd)
+    attractors = calc_win_region(transition_bdd, inv_bdd, err_bdd, f_bdd)
     assert_increasing(attractors)
 
     if attractors[-1] & init_state_bdd == cudd.Zero():
@@ -531,6 +531,8 @@ def synthesize(realiz_check):
         return True, None
 
     non_det_strategy = get_nondet_strategy(attractors, transition_bdd, inv_bdd, err_bdd)
+
+    non_det_strategy.PrintMinterm()
 
     func_by_var = extract_output_funcs(non_det_strategy, init_state_bdd, transition_bdd)
 
@@ -738,4 +740,3 @@ if __name__ == '__main__':
     logger.info(['unrealizable', 'realizable'][is_realizable])
 
     exit([EXIT_STATUS_UNREALIZABLE, EXIT_STATUS_REALIZABLE][is_realizable])
-    # XXX: the git history can also contain some implemented things
