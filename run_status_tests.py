@@ -12,15 +12,7 @@ tests_dirs = ["./tests/safety/", "./tests/buechi/"]
 
 ############################################################################
 from aisy import EXIT_STATUS_REALIZABLE, EXIT_STATUS_UNREALIZABLE
-
-
-tests = []
-for td in tests_dirs:
-    tests.extend(sorted([td + '/' + f
-                        for f in os.listdir(td) if f.endswith('.aag')]))
-
-
-assert tests, 'not tests found'
+import argparse
 
 
 def cat(test):
@@ -39,22 +31,47 @@ def is_realizable(test):
     assert 0, 'spec status is unknown'
 
 
-for t in tests:
-    print 'running ' + tool + ' ' + t
-    res = call(tool + ' ' + t, shell=True)
+def status_to_str(exit_status):
+    return ['unrealizable', 'realizable'][exit_status == EXIT_STATUS_REALIZABLE]
+
+
+def check_status(test):
+    res = call(tool + ' ' + test, shell=True)
 
     assert res in [EXIT_STATUS_REALIZABLE, EXIT_STATUS_UNREALIZABLE], 'unknown status: ' + str(res)
 
-    if res == EXIT_STATUS_REALIZABLE and not is_realizable(t):
+    expected = [EXIT_STATUS_UNREALIZABLE, EXIT_STATUS_REALIZABLE][is_realizable(test)]
+
+    if res != expected:
         print
-        print t
-        print 'FAILED: should be unrealizable: the tool found it realizable. hm.'.format(test=t)
+        print test
+        print 'FAILED (status): should be {expected}: the tool found it {res}'.format(expected=status_to_str(expected),
+                                                                                      res=status_to_str(res))
         exit(1)
 
-    if res == EXIT_STATUS_UNREALIZABLE and is_realizable(t):
-        print
-        print t
-        print 'FAILED: should be realizable: tool found it unrealizable. hm.'
-        exit(1)
 
-print 'ALL TESTS PASSED'
+def main():
+    tests = []
+    for td in tests_dirs:
+        tests.extend(sorted([td + '/' + f
+                             for f in os.listdir(td) if f.endswith('.aag')]))
+
+    assert tests, 'not tests found'
+
+    for t in tests:
+        print 'running ' + tool + ' ' + t
+        check_status(t)
+
+    print 'ALL TESTS PASSED'
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Tests runner')
+
+    parser.add_argument('--mc', action='store_true',
+                        required=False, default=False,
+                        help='model check the result, default: False')
+
+    args = parser.parse_args()
+    exit(main())
+
