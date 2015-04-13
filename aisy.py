@@ -532,7 +532,7 @@ def synthesize(realiz_check):
 
     non_det_strategy = get_nondet_strategy(attractors, transition_bdd, inv_bdd, err_bdd)
 
-    non_det_strategy.PrintMinterm()
+    # non_det_strategy.PrintMinterm()
 
     func_by_var = extract_output_funcs(non_det_strategy, init_state_bdd, transition_bdd)
 
@@ -694,7 +694,7 @@ def main(aiger_file_name, out_file_name, output_full_circuit, realiz_check):
         else:
             res, string = aiger_write_to_string(spec, aiger_ascii_mode, 268435456)
             assert res != 0 or out_file_name is None, 'writing failure'
-            logger.info('\n' + string)
+            print(string)   # print independently of logger level setup
         return True
 
     return False
@@ -725,6 +725,10 @@ if __name__ == '__main__':
     parser.add_argument('--realizability', '-r', action='store_true', default=False,
                         help='Check Realizability only (do not produce circuits)')
 
+    # in quiet the tool should print only the model if exists otherwise nothing
+    parser.add_argument('--quiet', '-q', action='store_true', default=False,
+                        help='Do not print anything but the result (if realizable)')
+
     args = parser.parse_args()
     
     exit_if_status_request(args)
@@ -733,7 +737,8 @@ if __name__ == '__main__':
         print('aiger file is required, exit')
         exit(-1)
 
-    setup_logging(0)
+    if args.quiet:
+        setup_logging(-1)
     
     is_realizable = main(args.aiger, args.out, args.full, args.realizability)
 
