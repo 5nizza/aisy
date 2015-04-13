@@ -33,6 +33,18 @@ Then compile AIGER parser, by running
 Some self-testing functionality is included in `run_status_tests.py`.
 
 
+## Test
+To run tests without model checking the models synthesized:
+
+    ./run_tests.py
+
+To run with following model checking:
+
+    ./run_tests.py --mc
+
+Do not forget to set up paths in `run_tests.py` first.
+
+
 ## Contact
 Email to ayrat.khalimovatgmail or post messages here.
 

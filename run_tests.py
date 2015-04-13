@@ -3,21 +3,22 @@ import os
 from subprocess import call, Popen
 
 ############################################################################
-# change these two paths according to your setup
+# When used with --mc flag, requires `iimc` model checker (http://iimc.colorado.edu/).
+# Change the paths according to your setup.
 
-# should be executable, to make it executable run: chmod +x ./aisy.py
+# Should be executable, to make it executable run: chmod +x ./aisy.py
 from tempfile import NamedTemporaryFile
 
-TOOL = "./aisy.py -q"  # '-q' -- be quiet
+TOOL = "./aisy.py -q"  # '-q' to be quiet (prints only the models)
 
-# used only if you model check the models
-# usage of iimc: iimc <input_file>
-# returns: 0 -- correct, 1 -- buggy, 2 -- unknown
+# Used only if run with --mc
+# Usage of iimc: iimc <input_file>
+# Returns: 0 -- correct, 1 -- buggy, 2 -- unknown
 MC = '/home/ayrat/projects/iimc-2.0/iimc'
 MC_RET_CORRECT = 0
 
-# used only if you model check the models:
-# converted from SYNT format to HWMCC format (all are AIGERs)
+# Used only if you model check the models:
+# Converted from SYNT format to HWMCC format (all are AIGERs)
 SYNT_TO_HWMCC = '/home/ayrat/projects/spec-framework/synt_2_hwmcc.py'
 FAIRNESS_2_JUSTICE = '/home/ayrat/projects/spec-framework/fairness_2_justice.py'   # although AIGER (draft) allows having fairness signals, not all MCs understand it. But they do understand justice.
 ##
