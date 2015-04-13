@@ -16,6 +16,7 @@ Prerequisites:
     (tested with versions 2.0.9, and seems to work with 3.0.2)
   - (probably) python2.7 headers
   - checked on Ubuntu 12.04 and 14.04, likely works with others
+  - testing script `run_tests.py` requires `spec-framework` from https://bitbucket.org/art_haali/spec-framework
 
 After installing pycudd library add cudd libraries into your `LD_LIBRARY_PATH`:
 
