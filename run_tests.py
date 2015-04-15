@@ -96,14 +96,11 @@ def check_status(test):
                                                                                       res=status_to_str(rc))
         exit(1)
 
-    if is_realizable(test) and not out:
-        print
-        print test
-        print 'is realizable but model was not printed'
-        exit(1)
-
-    return out.strip() + '\n' if out else None   # strip() to remove any funny garbage new lines if any
-                                                 # '\n' because aiger tools want this
+    if is_realizable(test):
+        return out.strip() + '\n' if out.strip() else None   # strip() to remove any funny garbage new lines if any
+                                                             # '\n' because aiger tools want this
+    
+    return None
 
 
 def convert_to_hwmcc(synt_model):
@@ -160,19 +157,24 @@ def check_model(synt_model, test_name):
 def main(model_check):
     global TOOL
     if not model_check:
-        TOOL += '-r'
+        TOOL += ' -r'
 
     tests = []
     for td in TESTS_DIR:
         tests.extend(sorted([td + '/' + f
                              for f in os.listdir(td) if f.endswith('.aag')]))
 
-    assert tests, 'not tests found'
+    assert tests, 'no tests found'
 
     for t in tests:
         print 'running ' + TOOL + ' ' + t
         model = check_status(t)
-        if model_check and model:
+        if model_check and is_realizable(t):
+            if not model:
+                print
+                print 'test:', test_name, ' failed: is realizale but no model'
+                exit(1)
+
             check_model(model, t)
 
     print 'ALL TESTS PASSED'
