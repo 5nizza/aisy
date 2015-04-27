@@ -85,7 +85,8 @@ def status_to_str(exit_status):
 def check_status(test):
     rc, out, err = execute_shell(TOOL + ' ' + test)
 
-    assert rc in [EXIT_STATUS_REALIZABLE, EXIT_STATUS_UNREALIZABLE], 'unknown status: ' + str(rc)
+    assert rc in [EXIT_STATUS_REALIZABLE, EXIT_STATUS_UNREALIZABLE], \
+        'unknown status: ' + str(rc) + ', out: \n' + out + '\nerr:\n' + err
 
     expected = [EXIT_STATUS_UNREALIZABLE, EXIT_STATUS_REALIZABLE][is_realizable(test)]
 
@@ -132,26 +133,45 @@ def to_str_ret_out_err(rc, out, err):
     return res
 
 
+def get_nof_properties(hwmcc_model):
+    header = hwmcc_model.splitlines()[0]
+    header_tokens = header.split()[1:]
+
+    # return nof outputs + nof B + nof J + nof F
+    # MILOABCJF
+    # 0123456789
+    res = int(header_tokens[3])
+    if len(header_tokens) > 5:
+        res += int(header_tokens[5])
+    if len(header_tokens) > 7:
+        res += int(header_tokens[7])
+    if len(header_tokens) > 8:
+        res += int(header_tokens[8])
+    return res
+
+
 def check_model(synt_model, test_name):
     """ :param synt_model: is not None or empty """
 
     hwmcc_model = convert_to_hwmcc(synt_model)
+    nof_properties = get_nof_properties(hwmcc_model)
 
     tmp_file_name = get_tmp_file_name() + '.aag'  # iimc requires the extension
     with open(tmp_file_name, 'w') as f:
         f.write(hwmcc_model)
 
-    ret, out, err = execute_shell(MC + ' ' + tmp_file_name)
+    for i in range(nof_properties):
+        ret, out, err = execute_shell(MC + ' --pi ' + str(i) +
+                                      ' ' + tmp_file_name)
+        if ret != MC_RET_CORRECT:
+            print
+            print 'test:', test_name
+            print 'hwmcc file:', tmp_file_name
+            print(to_str_ret_out_err(ret, out, err))
+            print 'Model checking of property %i failed' % i
+            exit(1)
 
-    if ret != MC_RET_CORRECT:
-        print
-        print 'test:', test_name
-        print 'hwmcc file:', tmp_file_name
-        print(to_str_ret_out_err(ret, out, err))
-        print 'Model checking failed'
-        exit(1)
-
-    os.remove(tmp_file_name)  # not in 'finally' block
+    os.remove(tmp_file_name)  # keep it if we crash
 
 
 def main(model_check):
@@ -172,7 +192,7 @@ def main(model_check):
         if model_check and is_realizable(t):
             if not model:
                 print
-                print 'test:', test_name, ' failed: is realizale but no model'
+                print 'test:', t, ' failed: is realizale but no model'
                 exit(1)
 
             check_model(model, t)
