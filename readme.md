@@ -22,6 +22,8 @@ After installing pycudd library add cudd libraries into your `LD_LIBRARY_PATH`:
 
     export LD_LIBRARY_PATH=/path/to/pycudd2.0.2/cudd-2.4.2/lib
 
+which is automated in `setup.sh` that is run with `. ./setup.sh`.
+
 Then compile AIGER parser, by running
 
     aiger_swig/make_swig.sh

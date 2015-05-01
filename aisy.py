@@ -30,7 +30,6 @@ Email me in case questions/suggestions/bugs: ayrat.khalimov at gmail
 
 ----------------------
 """
-
 status = ["TODO: 1) check the case when output functions depend on error fake latch\n"
           "TODO: 2) optim: get rid of fake latches(?)"]
 
@@ -40,6 +39,7 @@ import logging
 import pycudd
 import sys
 from aiger_swig.aiger_wrap import *
+import aiger_swig.aiger_wrap as aiglib
 
 # don't change status numbers since they are used by the performance script
 EXIT_STATUS_REALIZABLE = 10
@@ -54,10 +54,11 @@ cudd = None
 
 # Latching fair(t,i,o) signal makes things look like in most online lectures.
 # Let's emulate this by introducing a non-existing latch.
-# Note: none of outputs can depend on them. TODOfut: is using fair directly speed things up?
+# Note: none of outputs can depend on them.
+# TODOfut: is using fair directly speed things up?
 #: :type: aiger_symbol
-fair_fake_latch = None
-fake_latches_introduced = False
+fair_latch = None
+fair_latches_introduced = False
 
 #: :type: Logger
 logger = None
@@ -88,27 +89,38 @@ def strip_lit(l):
 
 
 def introduce_fair_latch_if():
-    global fair_fake_latch, fake_latches_introduced
+    global fair_latch, fair_latches_introduced, spec
 
-    if fake_latches_introduced:
-        return fair_fake_latch
-    fake_latches_introduced = True
+    if fair_latches_introduced:
+        return fair_latch
+    fair_latches_introduced = True
 
     if spec.num_outputs > 0:
         # (old) format version 1
         assert 0, 'not implemented yet'
     else:
-        # new version (in AKDV'15 we use this version)
-        fair_symbol = spec.fairness
-        fair_fake_latch = aiger_symbol()
-        fair_fake_latch.lit = (int(spec.maxvar) + 1) * 2   # hm, many vairable indices in between are unused
-        fair_fake_latch.name = 'fair_fake_latch'
-        if spec.num_fairness == 1:
-            fair_fake_latch.next = fair_symbol.lit
-        else:  # TODOopt: for safety slightly inneficient since in the first tick the latch is zero
-            fair_fake_latch.next = 1  # True
+        # TODOfut: currently explicitly add the latch
+        is_latch = False
+        if spec.fairness is not None:
+            _, latch_, _ = get_lit_type(strip_lit(spec.fairness.lit))
+            if latch_ is not None:
+                is_latch = True
 
-    return fair_fake_latch
+        if is_latch:
+            # no need to introduce a latch, it is already
+            fair_latch = latch_
+        else:
+            fair_latch_lit = (int(spec.maxvar) + 1) * 2   # hm, many vairable indices in between are unused
+            if spec.num_fairness == 1:
+                fair_latch_next = spec.fairness.lit
+            else:  # TODOopt: for safety slightly inneficient since in the first tick the latch is zero
+                fair_latch_next = 1  # True
+            aiglib.aiger_add_latch(spec, fair_latch_lit,
+                                   fair_latch_next, 'fair_latch')
+            fair_latch = aiglib.get_aiger_symbol(spec.latches,
+                                                 spec.num_latches-1)
+
+    return fair_latch
 
 
 def iterate_latches_and_error():
@@ -117,7 +129,7 @@ def iterate_latches_and_error():
     for i in range(int(spec.num_latches)):
         yield get_aiger_symbol(spec.latches, i)
 
-    yield fair_fake_latch
+    # yield fair_latch
 
 
 def parse_into_spec(aiger_file_name):
@@ -139,14 +151,9 @@ def parse_into_spec(aiger_file_name):
 
 
 def get_lit_type(stripped_lit):
-    global fair_fake_latch
-
-    if fair_fake_latch and fair_fake_latch.lit == stripped_lit:
-        return None, fair_fake_latch, None
-
     input_ = aiger_is_input(spec, stripped_lit)
     latch_ = aiger_is_latch(spec, stripped_lit)
-    and_ = aiger_is_and(spec, strip_lit(stripped_lit))
+    and_ = aiger_is_and(spec, stripped_lit)
 
     return input_, latch_, and_
 
@@ -154,23 +161,20 @@ def get_lit_type(stripped_lit):
 def get_bdd_for_value(lit):  # lit is variable index with sign
     stripped_lit = strip_lit(lit)
 
-    # we faked error latch and so we cannot call directly aiger_is_input, aiger_is_latch, aiger_is_and
-    input_, latch_, and_ = get_lit_type(stripped_lit)
-
     if stripped_lit == 0:
         res = cudd.Zero()
-
-    elif input_ or latch_:
-        res = cudd.IthVar(stripped_lit)    # use internal mapping of cudd
-
-    elif and_:
-        #: :type: aiger_and
-        arg1 = get_bdd_for_value(int(and_.rhs0))
-        arg2 = get_bdd_for_value(int(and_.rhs1))
-        res = arg1 & arg2
-
     else:
-        assert 0, 'should be impossible: if it is output then it is still either latch or and'
+        input_, latch_, and_ = get_lit_type(stripped_lit)
+
+        if input_ or latch_:
+            res = cudd.IthVar(stripped_lit)    # use internal mapping of cudd
+        elif and_:
+            #: :type: aiger_and
+            arg1 = get_bdd_for_value(int(and_.rhs0))
+            arg2 = get_bdd_for_value(int(and_.rhs1))
+            res = arg1 & arg2
+        else:
+            assert 0, 'should be impossible: if it is output then it is still either latch or and'
 
     if is_negated(lit):
         res = ~res
@@ -283,6 +287,7 @@ def unprime_latches_in_bdd(bdd):
     return unprimed_bdd
 
 
+# @lru_cache(maxsize=2**10)
 def modified_pre_sys_bdd(dst_states_bdd, transition_bdd, inv_bdd, err_bdd):
     """
     Calculate predecessor states of Dst(t') accounting for invariant and error transitions:
@@ -339,14 +344,29 @@ def calc_win_region(transition_bdd, inv_bdd, err_bdd, f_bdd):
     """
 
     logger.info('calc_win_region..')
-
+    # TODOopt: try algorithm from the Krish's lectures?
+    # TODOopt: try that weird: compute attractors for rings,
+    # then unite with the previous attractor (attr_i+1 = Force(attr_i\attr_i-1) \cup attr_i)
     Y = cudd.One()
-    while True:  # gfp  # TODOopt: try algorithm from the Krish's lectures?
-        attractors = [Y & f_bdd]
+    while True:  # gfp
+        attractors = list()
+
+        # i call `core` the states of fair, that will be visited inf often, i.e.:
+        # `core` satisfies `core = core&reach(core)`
+        #
+        # Below in the code: in the last iteration:
+        # `Y=reach(core)`.
+        #
+        # `pseudo_core` is `reach(core)&fair`
+        # (`==Y&fair` in the last iteration),
+        # it may be larger than `core`.
+        #
+        # Don't mess it up: below you _never_ compute `core` explicitly.
+
+        pseudo_core = (f_bdd & modified_pre_sys_bdd(Y, transition_bdd, inv_bdd, err_bdd))
         X = cudd.Zero()
         while True:  # lfp
-            nX = (f_bdd & modified_pre_sys_bdd(Y, transition_bdd, inv_bdd, err_bdd)) \
-                 | modified_pre_sys_bdd(X, transition_bdd, inv_bdd, err_bdd)
+            nX = pseudo_core | modified_pre_sys_bdd(X, transition_bdd, inv_bdd, err_bdd)
             if nX == X:
                 break
             X = nX
@@ -354,8 +374,10 @@ def calc_win_region(transition_bdd, inv_bdd, err_bdd, f_bdd):
 
         nY = X
         if nY == Y:
+            attractors.insert(0, pseudo_core)
             return attractors
         Y = nY
+        logger.info('calc_win_region: # attractors: ' + str(len(attractors)))
 
 
 def get_nondet_strategy(attractors, transition_bdd, inv_bdd, err_bdd):
@@ -378,11 +400,13 @@ def get_nondet_strategy(attractors, transition_bdd, inv_bdd, err_bdd):
     # inv(t,i,o) ->
     #   ~err(t,i,o) & (⋀_(Src,Dst): Src(t) -> ∃t' tau(t,i,t',o) & Dst(t'))
 
+    # This version is different from what we had in Robert's lecture:
+    # there: `OR (attr_i+1\attr_i goes to attr_i)`,
+    # versus `AND (attr_i+1 -> attr_i+1 goes to attr_i)` here.
+    # I haven't compared the performance.
     src_dst_conjuncts = cudd.One()
     for (src_i, dst_i) in src_dst_pairs:
         src, dst = attractors[src_i], attractors[dst_i]
-
-        assert len(get_controllable_vars_bdds()) > 0
 
         dstP = prime_latches_in_bdd(dst)
         tP = prime_latches_in_bdd(get_cube(get_all_latches_as_bdds()))
@@ -471,9 +495,18 @@ def extract_output_funcs(non_det_strategy, init_state_bdd, transition_bdd):
 
 
 def get_inv_err_f_bdds():
-    f_bdd = get_bdd_for_value(introduce_fair_latch_if().lit)
+    f_bdd = get_bdd_for_value(fair_latch.lit)
 
-    global spec, cudd
+    # Special handling in case fair signal is the negation
+    # of the value of a latch
+    # (recall, in this case we do not introduce
+    #  an additional fairness latch)
+    if spec.fairness and \
+            strip_lit(spec.fairness.lit) \
+                    == strip_lit(fair_latch.lit):
+        if is_negated(spec.fairness.lit):
+            f_bdd = ~f_bdd
+
     if spec.num_constraints == 0:
         inv_bdd = cudd.One()
     else:
@@ -531,7 +564,6 @@ def synthesize(realiz_check):
         return True, None
 
     non_det_strategy = get_nondet_strategy(attractors, transition_bdd, inv_bdd, err_bdd)
-
     # non_det_strategy.PrintMinterm()
 
     func_by_var = extract_output_funcs(non_det_strategy, init_state_bdd, transition_bdd)
@@ -568,7 +600,7 @@ def get_optimized_and_lit(a_lit, b_lit):
 
     assert 0, 'impossible'
 
-
+_reported = False
 def walk(a_bdd):
     """
     Walk given BDD node (recursively).
@@ -591,7 +623,13 @@ def walk(a_bdd):
     # but fake error latch will not be used in output functions (at least we don't need this..)
     a_lit = a_bdd.NodeReadIndex()
 
-    assert a_lit != fair_fake_latch.lit, 'smth went wrong: using fake latches in the definition of outputs'
+    global _reported
+    if not _reported:
+        logger.info('bdd node depends on fair latch')
+        _reported = True
+    # if a_lit == fair_latch.lit:
+    #     import pdb
+    #     pdb.set_trace()
 
     #: :type: DdNode
     t_bdd = a_bdd.T()
@@ -663,7 +701,7 @@ def init_cudd():
     #CUDD_REORDER_LINEAR_CONVERGE,
     #CUDD_REORDER_LAZY_SIFT,
     #CUDD_REORDER_EXACT
-    #cudd.AutodynEnable(4)
+    cudd.AutodynEnable(4)
     # cudd.AutodynDisable()
     # cudd.EnableReorderingReporting()
 
@@ -687,12 +725,12 @@ def main(aiger_file_name, out_file_name, output_full_circuit, realiz_check):
             model_to_aiger(c_bdd, func_bdd, output_full_circuit)
 
         # some model checkers do not like unordered variable names (when e.g. latch is > add)
-        aiger_reencode(spec)
+        #aiger_reencode(spec)
 
         if out_file_name:
             aiger_open_and_write_to_file(spec, out_file_name)
         else:
-            res, string = aiger_write_to_string(spec, aiger_ascii_mode, 268435456)
+            res, string = aiger_write_to_string(spec, aiger_ascii_mode, 2147483648)
             assert res != 0 or out_file_name is None, 'writing failure'
             print(string)   # print independently of logger level setup
         return True
@@ -737,9 +775,8 @@ if __name__ == '__main__':
         print('aiger file is required, exit')
         exit(-1)
 
-    if args.quiet:
-        setup_logging(-1)
-    
+    setup_logging(-1 if args.quiet else 0)
+
     is_realizable = main(args.aiger, args.out, args.full, args.realizability)
 
     logger.info(['unrealizable', 'realizable'][is_realizable])
