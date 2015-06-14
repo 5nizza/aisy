@@ -287,7 +287,55 @@ def unprime_latches_in_bdd(bdd):
     return unprimed_bdd
 
 
-# @lru_cache(maxsize=2**10)
+def modified_pre_env_bdd(dst_states_bdd, transition_bdd, inv_bdd, err_bdd):
+    """
+    Calculate env predecessor states of Dst(t') accounting for invariant and error transitions:
+
+       ∃t' ∃i ∀o:
+          inv(t,i,o) & (  err(t,i,o) | tau(t,i,t',o) & Dst(t')  )
+
+    :return: BDD representation of the predecessor states
+    """
+
+    #: :type: DdNode
+    primed_dst_states_bdd = prime_latches_in_bdd(dst_states_bdd)
+
+    #: :type: DdNode
+    tau_and_dst = transition_bdd & primed_dst_states_bdd  # all predecessors (i.e., if sys and env cooperate)
+
+    assert len(get_controllable_vars_bdds()) > 0  # TODOfut: without outputs make it model checker
+
+    err_or_exists_tau = err_bdd | tau_and_dst
+
+    inv_and_error_or_tau = inv_bdd & err_or_exists_tau
+
+    out_vars_cube = get_cube(get_controllable_vars_bdds())
+    forall_outs = inv_and_error_or_tau.UnivAbstract(out_vars_cube)  # ∀o inv & ..
+
+    inp_vars_bdds = get_uncontrollable_vars_bdds()
+    if inp_vars_bdds:
+        inp_vars_cube = get_cube(inp_vars_bdds)
+        exist_inputs = forall_outs.ExistAbstract(inp_vars_cube)  # ∃i ∀o: inv & ..
+    else:
+        exist_inputs = forall_outs
+
+    next_state_vars_cube = prime_latches_in_bdd(get_cube(get_all_latches_as_bdds()))
+    exist_tn__tau_and_dst = exist_inputs.ExistAbstract(next_state_vars_cube)  # ∃t'  ..
+
+    return exist_tn__tau_and_dst
+
+def calc_attr_err(transition_bdd, inv_bdd, err_bdd):
+    # since err_bdd describes transitions rather than states
+    Err = modified_pre_env_bdd(cudd.Zero(), transition_bdd, inv_bdd, err_bdd)
+
+    AttrErr = Err
+    while True:
+        nAttrErr = AttrErr | modified_pre_env_bdd(AttrErr, transition_bdd, inv_bdd, err_bdd)
+        if nAttrErr == AttrErr:
+            return AttrErr
+        AttrErr = nAttrErr
+
+
 def modified_pre_sys_bdd(dst_states_bdd, transition_bdd, inv_bdd, err_bdd):
     """
     Calculate predecessor states of Dst(t') accounting for invariant and error transitions:
@@ -328,7 +376,7 @@ def modified_pre_sys_bdd(dst_states_bdd, transition_bdd, inv_bdd, err_bdd):
     return forall_inputs
 
 
-def calc_win_region(transition_bdd, inv_bdd, err_bdd, f_bdd):
+def calc_win_region(init_bdd, transition_bdd, inv_bdd, err_bdd, f_bdd):
     """
     Calculate a winning region for the Buchi game.
     The win region for the Buchi game is:
@@ -341,42 +389,55 @@ def calc_win_region(transition_bdd, inv_bdd, err_bdd, f_bdd):
 
     :return: list of BDDs [Recur(F), Force1(Recur(F)), Force2(Recur(F)), ...],
              thus, [..][-1] is the winning region
+             or None if unrealizable
     """
 
     logger.info('calc_win_region..')
-    # TODOopt: try algorithm from the Krish's lectures?
-    # TODOopt: try that weird: compute attractors for rings,
+    # TODOopt1: try that weird: compute attractors for rings,
     # then unite with the previous attractor (attr_i+1 = Force(attr_i\attr_i-1) \cup attr_i)
-    Y = cudd.One()
-    while True:  # gfp
-        attractors = list()
 
-        # i call `core` the states of fair, that will be visited inf often, i.e.:
-        # `core` satisfies `core = core&reach(core)`
-        #
-        # Below in the code: in the last iteration:
-        # `Y=reach(core)`.
-        #
-        # `pseudo_core` is `reach(core)&fair`
-        # (`==Y&fair` in the last iteration),
-        # it may be larger than `core`.
-        #
-        # Don't mess it up: below you _never_ compute `core` explicitly.
+    # - how about computing certainly losing positions?
+    # Does not help.
+    # Attr_1(inv & err)
+    # safety_losing_positions = calc_attr_err(transition_bdd, inv_bdd, err_bdd)
+    # if init_bdd <= safety_losing_positions:
+    #     print 'init bdd is in safety losing set. no chance -- unrealizable.'
+    #     return None
 
-        pseudo_core = (f_bdd & modified_pre_sys_bdd(Y, transition_bdd, inv_bdd, err_bdd))
-        X = cudd.Zero()
-        while True:  # lfp
-            nX = pseudo_core | modified_pre_sys_bdd(X, transition_bdd, inv_bdd, err_bdd)
-            if nX == X:
+    # print 'safety_losing_positions', safety_losing_positions
+    #
+    #
+    #
+    #
+
+    # the notations are taken from "Infinite Games" by Martin Zimmerman/Felix Klein
+    # they use:
+    # Rec^0 = F
+    # W_1^n = V \ Attr_0(Rec^n(F))
+    # Rec^n+1 = F \ CPre_1 (W^n_1(Rec^n))
+    #
+    # If you transform you will get
+    # Rec^n+1 = F & CPre_0(Attr_0(Rec^n))
+    # and we use it below.
+    #
+    Rec = f_bdd   # the current recurrence set
+    while True:   # the outer loop that computes recurrence sets
+        attractors = list()   # we save the attractors in order to compute the strategy later
+        AttrRec = Rec
+        while True:  # computing the attractor of a current recurrence set
+            attractors.append(AttrRec)
+            nAttrRec = AttrRec | modified_pre_sys_bdd(AttrRec, transition_bdd, inv_bdd, err_bdd)
+            if nAttrRec == AttrRec:
                 break
-            X = nX
-            attractors.append(nX)
+            AttrRec = nAttrRec
 
-        nY = X
-        if nY == Y:
-            attractors.insert(0, pseudo_core)
+        if not (init_bdd <= AttrRec):  # I 'believe' this speeds up by 10% on unrealizable examples
+            return None                # is there the proper way to check init \in AttrRec?
+
+        nRec = Rec & modified_pre_sys_bdd(AttrRec, transition_bdd, inv_bdd, err_bdd)
+        if nRec == Rec:
             return attractors
-        Y = nY
+        Rec = nRec
         logger.info('calc_win_region: # attractors: ' + str(len(attractors)))
 
 
@@ -523,14 +584,16 @@ def get_inv_err_f_bdds():
 
 
 def assert_increasing(attractors):   # TODOopt: debug only
-    previous = cudd.Zero()
-    for a in attractors:
-        if not previous.Leq(a):
-            logger.error('attractors are not increasing')
+    previous = attractors[0]
+    for a in attractors[1:]:
+        if not (previous.Leq(a) and previous != a):
+            logger.error('attractors are not strictly increasing')
             print 'a:'
             a.PrintMinterm()
-            print 'previous'
+            print 'previous:'
             previous.PrintMinterm()
+
+            print 'len(attractors)', str(len(attractors))
 
             assert 0
 
@@ -554,11 +617,11 @@ def synthesize(realiz_check):
 
     inv_bdd, err_bdd, f_bdd = get_inv_err_f_bdds()
 
-    attractors = calc_win_region(transition_bdd, inv_bdd, err_bdd, f_bdd)
-    assert_increasing(attractors)
-
-    if attractors[-1] & init_state_bdd == cudd.Zero():
+    attractors = calc_win_region(init_state_bdd, transition_bdd, inv_bdd, err_bdd, f_bdd)
+    if attractors is None:
         return False, None
+
+    assert_increasing(attractors)
 
     if realiz_check:
         return True, None
@@ -700,7 +763,7 @@ def init_cudd():
     #CUDD_REORDER_LINEAR,
     #CUDD_REORDER_LINEAR_CONVERGE,
     #CUDD_REORDER_LAZY_SIFT,
-    #CUDD_REORDER_EXACT
+    # CUDD_REORDER_EXACT
     cudd.AutodynEnable(4)
     # cudd.AutodynDisable()
     # cudd.EnableReorderingReporting()
