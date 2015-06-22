@@ -13,15 +13,10 @@ TOOL = "./aisy.py -q"  # '-q' to be quiet (prints only the models)
 
 # Used only if run with --mc
 # Usage of iimc: iimc <input_file>
-# Returns: 0 -- correct, 1 -- buggy, 2 -- unknown
-MC = '/home/ayrat/projects/iimc-2.0/iimc'
-MC_RET_CORRECT = 0
+# Returns: 0 -- correct, non zero in other cases
+CHECK_MODEL = '/home/ayrat/projects/spec-framework/check_model.sh'
+CHECK_MODEL_RC_CORRECT = 0
 
-# Used only if you model check the models:
-# Converted from SYNT format to HWMCC format (all are AIGERs)
-SYNT_TO_HWMCC = '/home/ayrat/projects/spec-framework/synt_2_hwmcc.py'
-FAIRNESS_2_JUSTICE = '/home/ayrat/projects/spec-framework/fairness_2_justice.py'   # although AIGER (draft) allows having fairness signals, not all MCs understand it. But they do understand justice.
-##
 
 TESTS_DIR = ["./tests/safety/", "./tests/buechi/"]
 
@@ -104,72 +99,27 @@ def check_status(test):
     return None
 
 
-def convert_to_hwmcc(synt_model):
-    rc, out, err = execute_shell(SYNT_TO_HWMCC, input=synt_model)
-
-    if rc != 0:
-        print
-        print 'converting to HWMCC failed:'
-        print(to_str_ret_out_err(rc, out, err))
-        print 'input synt_model:'
-        print synt_model
-        assert 0
-
-    hwmcc_with_fairness_signal = out
-    rc, out, err = execute_shell(FAIRNESS_2_JUSTICE, input=hwmcc_with_fairness_signal)
-    if rc != 0:
-        print
-        print 'fairness_2_justice failed:'
-        print(to_str_ret_out_err(rc, out, err))
-        print 'input aiger:'
-        print hwmcc_with_fairness_signal
-        assert 0
-
-    return out
-
-
 def to_str_ret_out_err(rc, out, err):
     res = 'ret=' + str(rc) + '\nout=' + str(out) + '\nerr=' + str(err)
-    return res
-
-
-def get_nof_properties(hwmcc_model):
-    header = hwmcc_model.splitlines()[0]
-    header_tokens = header.split()[1:]
-
-    # return nof outputs + nof B + nof J + nof F
-    # MILOABCJF
-    # 0123456789
-    res = int(header_tokens[3])
-    if len(header_tokens) > 5:
-        res += int(header_tokens[5])
-    if len(header_tokens) > 7:
-        res += int(header_tokens[7])
-    if len(header_tokens) > 8:
-        res += int(header_tokens[8])
     return res
 
 
 def check_model(synt_model, test_name):
     """ :param synt_model: is not None or empty """
 
-    hwmcc_model = convert_to_hwmcc(synt_model)
-    nof_properties = get_nof_properties(hwmcc_model)
-
-    tmp_file_name = get_tmp_file_name() + '.aag'  # iimc requires the extension
+    tmp_file_name = get_tmp_file_name() + '.aag'
     with open(tmp_file_name, 'w') as f:
-        f.write(hwmcc_model)
+        f.write(synt_model)
+    
+    ret, out, err = execute_shell(CHECK_MODEL + ' ' + tmp_file_name)
 
-    for i in range(nof_properties):
-        ret, out, err = execute_shell(MC + ' --pi ' + str(i) +
-                                      ' ' + tmp_file_name)
-        if ret != MC_RET_CORRECT:
-            print
-            print 'test:', test_name
-            print 'hwmcc file:', tmp_file_name
-            print(to_str_ret_out_err(ret, out, err))
-            print 'Model checking of property %i failed' % i
-            exit(1)
+    if ret != CHECK_MODEL_RC_CORRECT:
+        print
+        print 'test:', test_name
+        print to_str_ret_out_err(ret, out, err)
+        print 'Tmp file name', tmp_file_name
+        print 'Model checking failed'
+        exit(1)
 
     os.remove(tmp_file_name)  # keep it if we crash
 
