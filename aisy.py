@@ -362,9 +362,16 @@ def modified_pre_sys_bdd(dst_states_bdd, transition_bdd, inv_bdd, err_bdd):
 
     assert len(get_controllable_vars_bdds()) > 0  # TODOfut: without outputs make it model checker
 
-    inv_impl_nerr = ~(inv_bdd & err_bdd)
+    nerr_and_tau = ~err_bdd & exist_tn__tau_and_dst
+    inv_impl_nerr_tau = ~inv_bdd | nerr_and_tau
+
     out_vars_cube = get_cube(get_controllable_vars_bdds())
-    exist_outs = (inv_impl_nerr & exist_tn__tau_and_dst).ExistAbstract(out_vars_cube)  # ∃o: inv->~err &  ∃t' tau(t,i,t',o)
+    exist_outs = inv_impl_nerr_tau.ExistAbstract(out_vars_cube)  # ∃o: inv-> ~err &  ∃t' tau(t,i,t',o)
+
+    # I think the version below is wrong:
+    # inv_impl_nerr = ~(inv_bdd & err_bdd)
+    # out_vars_cube = get_cube(get_controllable_vars_bdds())
+    # exist_outs = (inv_impl_nerr & exist_tn__tau_and_dst).ExistAbstract(out_vars_cube)  # ∃o: inv->~err &  ∃t' tau(t,i,t',o)
 
     inp_vars_bdds = get_uncontrollable_vars_bdds()
     if inp_vars_bdds:
@@ -404,14 +411,8 @@ def calc_win_region(init_bdd, transition_bdd, inv_bdd, err_bdd, f_bdd):
     #     print 'init bdd is in safety losing set. no chance -- unrealizable.'
     #     return None
 
-    # print 'safety_losing_positions', safety_losing_positions
-    #
-    #
-    #
-    #
-
-    # the notations are taken from "Infinite Games" by Martin Zimmerman/Felix Klein
-    # they use:
+    # The notations are taken from "Infinite Games" by Martin Zimmerman/Felix Klein.
+    # They use:
     # Rec^0 = F
     # W_1^n = V \ Attr_0(Rec^n(F))
     # Rec^n+1 = F \ CPre_1 (W^n_1(Rec^n))
@@ -420,6 +421,7 @@ def calc_win_region(init_bdd, transition_bdd, inv_bdd, err_bdd, f_bdd):
     # Rec^n+1 = F & CPre_0(Attr_0(Rec^n))
     # and we use it below.
     #
+
     Rec = f_bdd   # the current recurrence set
     while True:   # the outer loop that computes recurrence sets
         attractors = list()   # we save the attractors in order to compute the strategy later
@@ -431,6 +433,8 @@ def calc_win_region(init_bdd, transition_bdd, inv_bdd, err_bdd, f_bdd):
                 break
             AttrRec = nAttrRec
 
+        logger.info('calc_win_region: # attractors: ' + str(len(attractors)))
+
         if not (init_bdd <= AttrRec):  # I 'believe' this speeds up by 10% on unrealizable examples
             return None                # is there the proper way to check init \in AttrRec?
 
@@ -438,7 +442,6 @@ def calc_win_region(init_bdd, transition_bdd, inv_bdd, err_bdd, f_bdd):
         if nRec == Rec:
             return attractors
         Rec = nRec
-        logger.info('calc_win_region: # attractors: ' + str(len(attractors)))
 
 
 def get_nondet_strategy(attractors, transition_bdd, inv_bdd, err_bdd):
@@ -455,32 +458,33 @@ def get_nondet_strategy(attractors, transition_bdd, inv_bdd, err_bdd):
 
     logger.info('get_nondet_strategy..')
 
-    src_dst_pairs = [(i, (i-1)%len(attractors))
-                     for i in range(len(attractors))]
+    #   OR_(Src,Dst):
+    #                (inv -> Src & ~Dst & ~err & ∃t' tau(t,i,t',o) & Dst(t'))
 
-    # inv(t,i,o) ->
-    #   ~err(t,i,o) & (⋀_(Src,Dst): Src(t) -> ∃t' tau(t,i,t',o) & Dst(t'))
+    attractors = list(attractors)
+    attractors.reverse()
 
-    # This version is different from what we had in Robert's lecture:
-    # there: `OR (attr_i+1\attr_i goes to attr_i)`,
-    # versus `AND (attr_i+1 -> attr_i+1 goes to attr_i)` here.
-    # I haven't compared the performance.
-    src_dst_conjuncts = cudd.One()
-    for (src_i, dst_i) in src_dst_pairs:
-        src, dst = attractors[src_i], attractors[dst_i]
+    src_dst_disjuncts = cudd.Zero()
+    for i in range(len(attractors)):
+        if i != len(attractors)-1:
+            src, dst = attractors[i], attractors[i+1]
+            onion = src & ~dst
+        else:
+            src, dst = attractors[i], attractors[0]
+            onion = src
 
         dstP = prime_latches_in_bdd(dst)
         tP = prime_latches_in_bdd(get_cube(get_all_latches_as_bdds()))
 
         exists_tP__tau_and_dstP = (transition_bdd & dstP).ExistAbstract(tP)  # ∃t' tau(t,i,t',o) & Dst(t'))
 
-        src_impl_dst = ~src | exists_tP__tau_and_dstP
+        right = onion & ~err_bdd & exists_tP__tau_and_dstP
 
-        src_dst_conjuncts = src_dst_conjuncts & src_impl_dst
+        impl = ~inv_bdd | right
 
-    result = ~inv_bdd | (~err_bdd & src_dst_conjuncts)
+        src_dst_disjuncts = src_dst_disjuncts | impl
 
-    return result
+    return src_dst_disjuncts
 
 
 def compose_init_state_bdd():
