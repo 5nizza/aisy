@@ -1,4 +1,4 @@
-aag 174 2 10 0 162 0 1 0 1
+aag 174 2 10 0 162 0 1 1
 2
 4
 6 121
@@ -12,6 +12,7 @@ aag 174 2 10 0 162 0 1 0 1
 22 330
 24 343
 348
+1
 308
 26 13 11
 28 26 8
@@ -188,7 +189,7 @@ l7 sys_prop_spec3.state@0
 l8 sys_prop_counting_fairness.state@1
 l9 sys_prop_counting_fairness.state@0
 c0 AIGER_INVAR_0
-f0 AIGER_FAIR_0
+j0 AIGER_JUSTICE_0
 c
 smvtoaig
 1.9

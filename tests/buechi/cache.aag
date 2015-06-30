@@ -1,4 +1,4 @@
-aag 456 5 13 0 438 1 1 0 1
+aag 456 5 13 0 438 1 1 1
 2
 4
 6
@@ -19,6 +19,7 @@ aag 456 5 13 0 438 1 1 0 1
 36 891
 432
 912
+1
 37
 38 16 14
 40 5 2
@@ -478,7 +479,7 @@ l11 sys_prop_spec2.state@0
 l12 sys_prop_counting_fairness.state
 b0 AIGER_NEVER_0
 c0 AIGER_INVAR_0
-f0 AIGER_FAIR_0
+j0 AIGER_JUST_0
 c
 smvtoaig
 1.9
