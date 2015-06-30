@@ -384,4 +384,16 @@ aiger_and *get_aiger_and(aiger_and *base, unsigned index) {
     return base+index;
 }
 
+int get_justice_lit(aiger* public, int justice_index, int lit_index) {
+    return public->justice[justice_index].lits[lit_index];
+}
+
+void set_justice_lit(aiger* public, 
+                     int justice_index, 
+                     int lit_index, 
+                     int new_lit_value) {
+
+    public->justice[justice_index].lits[lit_index] = new_lit_value;
+}
+
 %}

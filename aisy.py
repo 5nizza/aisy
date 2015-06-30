@@ -52,13 +52,13 @@ spec = None
 #: :type: DdManager
 cudd = None
 
-# Latching fair(t,i,o) signal makes things look like in most online lectures.
+# Latching just(t,i,o) signal makes things look like in most online lectures.
 # Let's emulate this by introducing a non-existing latch.
 # Note: none of outputs can depend on them.
-# TODOfut: is using fair directly speed things up?
+# TODOfut: is using `just` directly speed things up?
 #: :type: aiger_symbol
-fair_latch = None
-fair_latches_introduced = False
+just_latch = None
+just_latches_introduced = False
 
 #: :type: Logger
 logger = None
@@ -88,12 +88,12 @@ def strip_lit(l):
     return l & ~1
 
 
-def introduce_fair_latch_if():
-    global fair_latch, fair_latches_introduced, spec
+def introduce_just_latch_if():
+    global just_latch, just_latches_introduced, spec
 
-    if fair_latches_introduced:
-        return fair_latch
-    fair_latches_introduced = True
+    if just_latches_introduced:
+        return just_latch
+    just_latches_introduced = True
 
     if spec.num_outputs > 0:
         # (old) format version 1
@@ -101,35 +101,33 @@ def introduce_fair_latch_if():
     else:
         # TODOfut: currently explicitly add the latch
         is_latch = False
-        if spec.fairness is not None:
-            _, latch_, _ = get_lit_type(strip_lit(spec.fairness.lit))
+        if spec.num_justice == 1:
+            _, latch_, _ = get_lit_type(strip_lit(aiglib.get_justice_lit(spec, 0, 0)))
             if latch_ is not None:
                 is_latch = True
 
         if is_latch:
-            # no need to introduce a latch, it is already
-            fair_latch = latch_
+            # no need to introduce a latch, it is a latch already
+            just_latch = latch_
         else:
-            fair_latch_lit = (int(spec.maxvar) + 1) * 2   # hm, many vairable indices in between are unused
-            if spec.num_fairness == 1:
-                fair_latch_next = spec.fairness.lit
+            just_latch_lit = (int(spec.maxvar) + 1) * 2   # hm, many variable indices in between are unused
+            if spec.num_justice == 1:
+                just_latch_next = aiglib.get_justice_lit(spec, 0, 0)
             else:  # TODOopt: for safety slightly inneficient since in the first tick the latch is zero
-                fair_latch_next = 1  # True
-            aiglib.aiger_add_latch(spec, fair_latch_lit,
-                                   fair_latch_next, 'fair_latch')
-            fair_latch = aiglib.get_aiger_symbol(spec.latches,
+                just_latch_next = 1  # True
+            aiglib.aiger_add_latch(spec, just_latch_lit,
+                                   just_latch_next, 'just_latch')
+            just_latch = aiglib.get_aiger_symbol(spec.latches,
                                                  spec.num_latches-1)
 
-    return fair_latch
+    return just_latch
 
 
 def iterate_latches_and_error():
-    introduce_fair_latch_if()
+    introduce_just_latch_if()
 
     for i in range(int(spec.num_latches)):
         yield get_aiger_symbol(spec.latches, i)
-
-    # yield fair_latch
 
 
 def parse_into_spec(aiger_file_name):
@@ -142,12 +140,12 @@ def parse_into_spec(aiger_file_name):
     assert not err, err
 
     # assert there is no mix of formats
-    assert (spec.num_outputs == 1) ^ (spec.num_bad == 1 or spec.num_fairness == 1), 'mix of two formats'
-    assert spec.num_outputs + spec.num_fairness + spec.num_bad >= 1, 'no properties'
+    assert (spec.num_outputs == 1) ^ (spec.num_bad == 1 or spec.num_justice == 1), 'mix of two formats'
+    assert spec.num_outputs + spec.num_justice + spec.num_bad >= 1, 'no properties'
     assert spec.num_bad <= 1 and \
-           spec.num_fairness <= 1 and spec.num_constraints <= 1 and spec.num_constraints <= 1, 'not supported yet'
+           spec.num_justice <= 1 and spec.num_constraints <= 1 and spec.num_constraints <= 1, 'not supported yet'
 
-    assert spec.num_justice == 0, 'not supported'
+    assert spec.num_fairness == 0, 'not supported'
 
 
 def get_lit_type(stripped_lit):
@@ -560,16 +558,16 @@ def extract_output_funcs(non_det_strategy, init_state_bdd, transition_bdd):
 
 
 def get_inv_err_f_bdds():
-    f_bdd = get_bdd_for_value(fair_latch.lit)
+    f_bdd = get_bdd_for_value(just_latch.lit)
 
-    # Special handling in case fair signal is the negation
+    # Special handling in case `just` signal is the negation
     # of the value of a latch
     # (recall, in this case we do not introduce
-    #  an additional fairness latch)
-    if spec.fairness and \
-            strip_lit(spec.fairness.lit) \
-                    == strip_lit(fair_latch.lit):
-        if is_negated(spec.fairness.lit):
+    #  an additional justice latch)
+    if spec.num_justice == 1 and \
+            strip_lit(aiglib.get_justice_lit(spec, 0, 0)) \
+                    == strip_lit(just_latch.lit):
+        if is_negated(aiglib.get_justice_lit(spec, 0, 0)):
             f_bdd = ~f_bdd
 
     if spec.num_constraints == 0:
@@ -692,7 +690,7 @@ def walk(a_bdd):
 
     global _reported
     if not _reported:
-        logger.info('bdd node depends on fair latch')
+        logger.info('bdd node depends on the justice latch')
         _reported = True
     # if a_lit == fair_latch.lit:
     #     import pdb
@@ -792,7 +790,7 @@ def main(aiger_file_name, out_file_name, output_full_circuit, realiz_check):
             model_to_aiger(c_bdd, func_bdd, output_full_circuit)
 
         # some model checkers do not like unordered variable names (when e.g. latch is > add)
-        #aiger_reencode(spec)
+        # aiger_reencode(spec)
 
         if out_file_name:
             aiger_open_and_write_to_file(spec, out_file_name)
