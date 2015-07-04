@@ -53,5 +53,5 @@ Email to ayrat.khalimovatgmail or post messages here.
 
 
 ## Authors
-Ayrat Khalimov, Robert Koenighoffer, and [SCOS group](http://www.iaik.tugraz.at/content/research/scos/) at TU Graz.
+Ayrat Khalimov, and many thanks to Robert Koenighoffer.
 
