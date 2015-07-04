@@ -1,10 +1,8 @@
 ## What?
 
-Synthesis tool using [AIGER](http://fmv.jku.at/aiger/) format as input.
+Synthesis tool using a modified [AIGER](http://fmv.jku.at/aiger/) format as input.
 
-The input format is described [here](https://verify.iaik.tugraz.at/research/bin/view/Ausgewaehltekapitel/PartII).
-
-See also slides and video there.
+The input format is described in the paper published at SYNT.
 
 
 ## Setup
@@ -13,7 +11,7 @@ Prerequisites:
   - pycudd library: http://bears.ece.ucsb.edu/pycudd.html
     (tested with version 2.0.2)
   - swig library: http://www.swig.org/
-    (tested with versions 2.0.9, and seems to work with 3.0.2)
+    (tested with versions 2.0.11)
   - (probably) python2.7 headers
   - checked on Ubuntu 12.04 and 14.04, likely works with others
   - testing script `run_tests.py` requires `spec-framework` from https://bitbucket.org/art_haali/spec-framework
@@ -53,5 +51,5 @@ Email to ayrat.khalimovatgmail or post messages here.
 
 
 ## Authors
-Ayrat Khalimov, and many thanks to Robert Koenighoffer.
+Ayrat Khalimov, and many thanks to Robert Koenighofer for fruitful discussions.
 
