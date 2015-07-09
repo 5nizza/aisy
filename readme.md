@@ -31,8 +31,6 @@ Then compile AIGER parser, by running
 
     ./aisy.py -h
 
-Some self-testing functionality is included in `run_status_tests.py`.
-
 
 ## Test
 To run tests without model checking the models synthesized:
