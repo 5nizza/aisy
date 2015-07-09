@@ -1,4 +1,4 @@
-aag 26 1 6 0 19 0 1 1
+aag 26 1 6 0 19 0 1 1 0
 2
 4 4
 6 16
@@ -9,8 +9,8 @@ aag 26 1 6 0 19 0 1 1
 52
 1
 20
-16 5 3
-18 9 2
+16 5 2
+18 9 3
 20 15 13
 22 6 5
 24 14 13
@@ -29,14 +29,14 @@ aag 26 1 6 0 19 0 1 1
 50 49 47
 52 50 45
 i0 controllable_beacon
-l0 sys_prop_spec2.state@1
-l1 sys_prop_spec2.state@0
-l2 sys_prop_spec1.state@1
-l3 sys_prop_spec1.state@0
-l4 sys_prop_counting_fairness.state@1
-l5 sys_prop_counting_fairness.state@0
+l0 sys_prop_module_inf_often_high_gff_.state@1
+l1 sys_prop_module_inf_often_high_gff_.state@0
+l2 sys_prop_module_inf_often_low_gff_.state@1
+l3 sys_prop_module_inf_often_low_gff_.state@0
+l4 sys_prop_counting_justice_main.state@1
+l5 sys_prop_counting_justice_main.state@0
 c0 AIGER_INVAR_0
-j0 AIGER_JUST_0
+j0 AIGER_JUSTICE_0
 c
 smvtoaig
 1.9

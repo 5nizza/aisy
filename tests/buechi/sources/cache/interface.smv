@@ -1,18 +1,12 @@
 MODULE main
---<inputs>
 VAR
   CPUread: boolean;
   CPUwrite: boolean;
   valueIn: boolean;
---</inputs>
-
---<outputs>
-VAR 
+VAR --controllable
   valueOut: boolean;
   done: boolean;
---</outputs>
 
---<common definitions> used in the specs, goes last before spec
 DEFINE 
   a := TRUE;
   b := FALSE;
@@ -22,33 +16,17 @@ DEFINE
   
   readA := CPUread & valueOut=a & done;
   readB := CPUread & valueOut=b & done;
---</common definitions>
 
-SPEC
-1:
-  "CPU does not change commands until they are processed"
-  data=nbw_invariant_cpu_waits_done.gff
-  polarity=good trace
-  input_type=automaton
-  output_type=invariant
+ENV_AUTOMATON_SPEC
+--  "CPU does not change commands until they are processed"
+  nbw_invariant_cpu_waits_done.gff;
 
-2:
-  "All CPU commands are eventually executed"
-  data=ucw_cpu_cmds_are_executed.gff
-  polarity=bad trace
-  input_type=automaton
-  output_type=spec
+--  "No simultaneous CPUread and CPUwrite"
+  nbw_invariant_read_or_write.gff;
 
-3:
-  "No simultaneous CPUread and CPUwrite"
-  data=nbw_invariant_read_or_write.gff
-  polarity=good trace
-  input_type=automaton
-  output_type=invariant
+SYS_AUTOMATON_SPEC
+--  "All CPU commands are eventually executed"
+  !ucw_cpu_cmds_are_executed.gff;
 
-4:
-  "Reads returns the last written value"
-  data=ucw_causal-reading.gff
-  polarity=bad trace
-  input_type=automaton
-  output_type=spec
+--  "Reads returns the last written value"
+  !ucw_causal-reading.gff;

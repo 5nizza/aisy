@@ -46,3 +46,6 @@ nosetests.xml
 benchmarking/results/results*
 
 *.log
+tests/buechi/sources/*/*.aag
+tests/buechi/sources/*/*.klive*
+tmp*

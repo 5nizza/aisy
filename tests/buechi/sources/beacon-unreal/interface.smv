@@ -1,21 +1,10 @@
 MODULE main
---<inputs>
 VAR
   r: boolean;
---</inputs>
 
---<outputs>
-VAR 
+VAR  --controllable
   g: boolean;
---</outputs>
 
---<common definitions> used in the specs, goes last before spec
---</common definitions>
-
-SPEC
-1:
-  "GF(r & g)"
-  data=inf_often_high.gff
-  polarity=good trace
-  input_type=automaton
-  output_type=spec
+SYS_AUTOMATON_SPEC
+--"GF(r & g)"
+inf_often_high.gff;

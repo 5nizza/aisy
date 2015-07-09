@@ -1,4 +1,4 @@
-aag 58 2 11 0 45 0 1 1
+aag 58 2 11 0 45 0 1 1 0
 2
 4
 6 6
@@ -16,9 +16,9 @@ aag 58 2 11 0 45 0 1 1
 1
 38
 28 7 2
-30 11 5
+30 11 4
 32 15 3
-34 19 4
+34 19 5
 36 27 25
 38 36 23
 40 8 7
@@ -62,19 +62,19 @@ aag 58 2 11 0 45 0 1 1
 116 114 101
 i0 controllable_beacon1
 i1 controllable_beacon2
-l0 sys_prop_spec11.state@1
-l1 sys_prop_spec11.state@0
-l2 sys_prop_spec22.state@1
-l3 sys_prop_spec22.state@0
-l4 sys_prop_spec21.state@1
-l5 sys_prop_spec21.state@0
-l6 sys_prop_spec12.state@1
-l7 sys_prop_spec12.state@0
-l8 sys_prop_counting_fairness.state@2
-l9 sys_prop_counting_fairness.state@1
-l10 sys_prop_counting_fairness.state@0
+l0 sys_prop_module_inf_often_high1_gff_.state@1
+l1 sys_prop_module_inf_often_high1_gff_.state@0
+l2 sys_prop_module_inf_often_high2_gff_.state@1
+l3 sys_prop_module_inf_often_high2_gff_.state@0
+l4 sys_prop_module_inf_often_low1_gff__.state@1
+l5 sys_prop_module_inf_often_low1_gff__.state@0
+l6 sys_prop_module_inf_often_low2_gff__.state@1
+l7 sys_prop_module_inf_often_low2_gff__.state@0
+l8 sys_prop_counting_justice_main.state@2
+l9 sys_prop_counting_justice_main.state@1
+l10 sys_prop_counting_justice_main.state@0
 c0 AIGER_INVAR_0
-j0 AIGER_JUST_0
+j0 AIGER_JUSTICE_0
 c
 smvtoaig
 1.9

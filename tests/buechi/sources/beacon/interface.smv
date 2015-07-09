@@ -1,26 +1,11 @@
 MODULE main
---<inputs>
---</inputs>
-
---<outputs>
-VAR 
+VAR --controllable
   beacon: boolean;
---</outputs>
 
---<common definitions> used in the specs, goes last before spec
---</common definitions>
+SYS_AUTOMATON_SPEC
+-- "Inf often high"
+inf_often_high.gff;
 
-SPEC
-1:
-  "Inf often high"
-  data=inf_often_high.gff
-  polarity=good trace
-  input_type=automaton
-  output_type=spec
+-- "Inf often low"
+inf_often_low.gff;
 
-2:
-  "Inf often high"
-  data=inf_often_low.gff
-  polarity=good trace
-  input_type=automaton
-  output_type=spec

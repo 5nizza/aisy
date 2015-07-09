@@ -1,35 +1,17 @@
 MODULE main
---<inputs>
 VAR
   r: boolean;
---</inputs>
 
---<outputs>
-VAR 
-  g: boolean;
---</outputs>
+VAR  --controllable
+  g: boolean; 
 
---<common definitions> used in the specs, goes last before spec
---</common definitions>
 
-SPEC
-1:
-  "G(r->Fg)"
-  data=req_is_granted.gff
-  polarity=bad trace
-  input_type=automaton
-  output_type=spec
+SYS_AUTOMATON_SPEC
+-- "G(r->Fg)"
+!req_is_granted.gff;
 
-2:
-  "GF(~g)"
-  data=inf_often_low.gff
-  polarity=good trace
-  input_type=automaton
-  output_type=spec
+-- "GF(~g)"
+inf_often_low.gff;
 
-3:
-  "G(g -> (g W ~r))"
-  data=grant_waits_low_request.gff
-  polarity=good trace
-  input_type=automaton
-  output_type=spec
+-- "G(g -> (g W ~r))"
+grant_waits_low_request.gff;

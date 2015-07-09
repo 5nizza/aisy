@@ -1,31 +1,24 @@
-aag 18 2 3 0 13 0 1 0 1
+aag 10 2 3 0 5 0 1 1 0
 2
 4
-6 29
-8 30
-10 35
-37
+6 6
+8 14
+10 19
+21
+1
 11
 12 4 2
-14 12 8
-16 13 9
-18 12 9
-20 13 8
-22 21 19
-24 22 17
-26 24 15
-28 27 7
-30 12 7
-32 8 7
-34 32 10
-36 8 6
+14 12 7
+16 8 7
+18 16 10
+20 8 6
 i0 r
 i1 controllable_g
-l0 sys_prop_spec1.state@1
-l1 sys_prop_spec1.state@0
-l2 sys_prop_counting_fairness.state
+l0 sys_prop_module_inf_often_high_gff_.state@1
+l1 sys_prop_module_inf_often_high_gff_.state@0
+l2 sys_prop_counting_justice_main.state
 c0 AIGER_INVAR_0
-f0 AIGER_FAIR_0
+j0 AIGER_JUSTICE_0
 c
 smvtoaig
 1.9

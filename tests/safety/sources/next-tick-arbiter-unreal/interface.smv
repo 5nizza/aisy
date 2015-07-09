@@ -1,37 +1,19 @@
 MODULE main
---<inputs>
 VAR
   r1: boolean;
   r2: boolean;
---</inputs>
 
---<outputs>
-VAR 
+VAR --controllable
   g1: boolean;
   g2: boolean;
---</outputs>
 
---<common definitions> used in the specs, goes last before spec
---</common definitions>
+SYS_AUTOMATON_SPEC
+-- "G(r1<->Xg1)"
+!req_is_granted1.gff;
 
-SPEC
-1:
-  "G(r1<->Xg1)"
-  data=req_is_granted1.gff
-  polarity=bad trace
-  input_type=automaton
-  output_type=spec
+-- "G(r2<->Xg2)"
+!req_is_granted2.gff;
 
-2:
-  "G(r2<->Xg2)"
-  data=req_is_granted2.gff
-  polarity=bad trace
-  input_type=automaton
-  output_type=spec
+-- "~G(g1 & g2)"
+!mut_exclusion.gff;
 
-3:
-  "~G(g1 & g2)"
-  data=mut_exclusion.gff
-  polarity=bad trace
-  input_type=automaton
-  output_type=spec
