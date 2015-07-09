@@ -39,6 +39,7 @@ import logging
 import pycudd
 import sys
 from aiger_swig.aiger_wrap import *
+from ansistrm import ColorizingStreamHandler
 import aiger_swig.aiger_wrap as aiglib
 
 # don't change status numbers since they are used by the performance script
@@ -64,20 +65,33 @@ just_latches_introduced = False
 logger = None
 
 
-def setup_logging(verbose):
-    global logger
+def setup_logging(verbose_level, filename=None):
     level = None
-    if verbose is 0:
+    if verbose_level == -1:
+        level = logging.CRITICAL
+    if verbose_level is 0:
         level = logging.INFO
-    elif verbose >= 1:
+    elif verbose_level >= 1:
         level = logging.DEBUG
 
-    logging.basicConfig(format="%(asctime)-10s%(message)s",
-                        datefmt="%H:%M:%S",
-                        level=level,
-                        stream=sys.stdout)
+    formatter = logging.Formatter(fmt="%(asctime)-10s%(message)s", datefmt="%H:%M:%S")
 
-    logger = logging.getLogger(__name__)
+    stdout_handler = ColorizingStreamHandler()
+    stdout_handler.setFormatter(formatter)
+    stdout_handler.stream = sys.stdout
+
+    if not filename:
+        filename = 'last.log'
+    file_handler = logging.FileHandler(filename=filename, mode='w')
+    file_handler.setFormatter(formatter)
+
+    root = logging.getLogger()
+    root.addHandler(stdout_handler)
+    root.addHandler(file_handler)
+
+    root.setLevel(level)
+
+    return logging.getLogger(__name__)
 
 
 def is_negated(l):
@@ -322,6 +336,7 @@ def modified_pre_env_bdd(dst_states_bdd, transition_bdd, inv_bdd, err_bdd):
 
     return exist_tn__tau_and_dst
 
+
 def calc_attr_err(transition_bdd, inv_bdd, err_bdd):
     # since err_bdd describes transitions rather than states
     Err = modified_pre_env_bdd(cudd.Zero(), transition_bdd, inv_bdd, err_bdd)
@@ -500,7 +515,7 @@ def compose_init_state_bdd():
     return init_state_bdd
 
 
-def extract_output_funcs(non_det_strategy, init_state_bdd, transition_bdd):
+def extract_output_funcs(non_det_strategy):
     """
     From a given non-deterministic strategy (the set of triples `(x,i,o)`),
     for each output variable `o`, calculate the set of pairs `(x,i)` where `o` will hold.
@@ -631,7 +646,7 @@ def synthesize(realiz_check):
     non_det_strategy = get_nondet_strategy(attractors, transition_bdd, inv_bdd, err_bdd)
     # non_det_strategy.PrintMinterm()
 
-    func_by_var = extract_output_funcs(non_det_strategy, init_state_bdd, transition_bdd)
+    func_by_var = extract_output_funcs(non_det_strategy)
 
     return True, func_by_var
 
@@ -665,7 +680,10 @@ def get_optimized_and_lit(a_lit, b_lit):
 
     assert 0, 'impossible'
 
+
 _reported = False
+
+
 def walk(a_bdd):
     """
     Walk given BDD node (recursively).
@@ -744,27 +762,27 @@ def init_cudd():
     global cudd
     cudd = pycudd.DdManager()
     cudd.SetDefault()
-    #CUDD_REORDER_SAME,
-    #CUDD_REORDER_NONE,
-    #CUDD_REORDER_RANDOM,
-    #CUDD_REORDER_RANDOM_PIVOT,
-    #CUDD_REORDER_SIFT,
-    #CUDD_REORDER_SIFT_CONVERGE,
-    #CUDD_REORDER_SYMM_SIFT,
-    #CUDD_REORDER_SYMM_SIFT_CONV,
-    #CUDD_REORDER_WINDOW2,
-    #CUDD_REORDER_WINDOW3,
-    #CUDD_REORDER_WINDOW4,
-    #CUDD_REORDER_WINDOW2_CONV,
-    #CUDD_REORDER_WINDOW3_CONV,
-    #CUDD_REORDER_WINDOW4_CONV,
-    #CUDD_REORDER_GROUP_SIFT,
-    #CUDD_REORDER_GROUP_SIFT_CONV,
-    #CUDD_REORDER_ANNEALING,
-    #CUDD_REORDER_GENETIC,
-    #CUDD_REORDER_LINEAR,
-    #CUDD_REORDER_LINEAR_CONVERGE,
-    #CUDD_REORDER_LAZY_SIFT,
+    # CUDD_REORDER_SAME,
+    # CUDD_REORDER_NONE,
+    # CUDD_REORDER_RANDOM,
+    # CUDD_REORDER_RANDOM_PIVOT,
+    # CUDD_REORDER_SIFT,
+    # CUDD_REORDER_SIFT_CONVERGE,
+    # CUDD_REORDER_SYMM_SIFT,
+    # CUDD_REORDER_SYMM_SIFT_CONV,
+    # CUDD_REORDER_WINDOW2,
+    # CUDD_REORDER_WINDOW3,
+    # CUDD_REORDER_WINDOW4,
+    # CUDD_REORDER_WINDOW2_CONV,
+    # CUDD_REORDER_WINDOW3_CONV,
+    # CUDD_REORDER_WINDOW4_CONV,
+    # CUDD_REORDER_GROUP_SIFT,
+    # CUDD_REORDER_GROUP_SIFT_CONV,
+    # CUDD_REORDER_ANNEALING,
+    # CUDD_REORDER_GENETIC,
+    # CUDD_REORDER_LINEAR,
+    # CUDD_REORDER_LINEAR_CONVERGE,
+    # CUDD_REORDER_LAZY_SIFT,
     # CUDD_REORDER_EXACT
     cudd.AutodynEnable(4)
     # cudd.AutodynDisable()
@@ -805,10 +823,10 @@ def main(aiger_file_name, out_file_name, output_full_circuit, realiz_check):
 
 def exit_if_status_request(args):
     if args.status:
-        print('-'*80)
+        print('-' * 80)
         print('The current status of development')
         print('-- ' + '\n-- '.join(status))
-        print('-'*80)
+        print('-' * 80)
         exit(0)
     else:
         pass
@@ -840,7 +858,7 @@ if __name__ == '__main__':
         print('aiger file is required, exit')
         exit(-1)
 
-    setup_logging(-1 if args.quiet else 0)
+    logger = setup_logging(-1 if args.quiet else 0)
 
     is_realizable = main(args.aiger, args.out, args.full, args.realizability)
 
