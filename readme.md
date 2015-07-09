@@ -31,6 +31,12 @@ Then compile AIGER parser, by running
 
     ./aisy.py -h
 
+If you get 
+
+`ImportError: libcudd.so: cannot open shared object file: No such file or directory`
+
+go to step `Setup`.
+
 
 ## Test
 To run tests without model checking the models synthesized:
