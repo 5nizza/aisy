@@ -1,0 +1,124 @@
+aag 97 4 10 0 83 1 1 1 0
+2
+4
+6
+8
+10 10
+12 42
+14 71
+16 76
+18 105
+20 110
+22 137
+24 146
+26 166
+28 171
+172
+194
+1
+148
+30 4 2
+32 30 13
+34 13 11
+36 34 31
+38 37 12
+40 39 33
+42 41 11
+44 16 7
+46 6 3
+48 7 3
+50 6 2
+52 51 49
+54 52 47
+56 55 17
+58 7 2
+60 58 17
+62 16 6
+64 63 61
+66 64 57
+68 66 45
+70 69 15
+72 17 3
+74 73 15
+76 74 7
+78 20 9
+80 8 5
+82 9 5
+84 8 4
+86 85 83
+88 86 81
+90 89 21
+92 9 4
+94 92 21
+96 20 8
+98 97 95
+100 98 91
+102 100 79
+104 103 19
+106 21 5
+108 107 19
+110 108 9
+112 9 7
+114 8 7
+116 9 6
+118 117 115
+120 118 113
+122 121 25
+124 8 6
+126 125 120
+128 127 24
+130 124 25
+132 131 129
+134 132 123
+136 135 23
+138 25 23
+140 138 121
+142 141 128
+144 143 131
+146 145 23
+148 29 27
+150 17 15
+152 28 27
+154 152 150
+156 21 19
+158 29 26
+160 158 156
+162 161 26
+164 163 155
+166 165 149
+168 155 28
+170 169 149
+172 24 23
+174 12 11
+176 12 10
+178 16 14
+180 20 18
+182 24 22
+184 28 26
+186 185 183
+188 186 181
+190 188 179
+192 190 177
+194 192 175
+i0 r1
+i1 r2
+i2 controllable_g1
+i3 controllable_g2
+l0 env_prop_module__mut_exclusion_of_requests_gff_.state@1
+l1 env_prop_module__mut_exclusion_of_requests_gff_.state@0
+l2 sys_prop_module_req_is_granted_gff_.state@1
+l3 sys_prop_module_req_is_granted_gff_.state@0
+l4 sys_prop_module_req_is_granted2_gff_.state@1
+l5 sys_prop_module_req_is_granted2_gff_.state@0
+l6 sys_prop_module__mut_exclusion_gff_.state@1
+l7 sys_prop_module__mut_exclusion_gff_.state@0
+l8 sys_prop_counting_justice_main.state@1
+l9 sys_prop_counting_justice_main.state@0
+b0 AIGER_NEVER_0
+c0 AIGER_INVAR_0
+j0 AIGER_JUSTICE_0
+c
+smvtoaig
+1.9
+<stdin>
+realizable
