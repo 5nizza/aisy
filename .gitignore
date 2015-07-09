@@ -44,3 +44,5 @@ nosetests.xml
 
 
 benchmarking/results/results*
+
+*.log
