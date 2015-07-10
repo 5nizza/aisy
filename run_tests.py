@@ -18,7 +18,7 @@ CHECK_MODEL = '/home/ayrat/projects/spec-framework/check_model.sh'
 CHECK_MODEL_RC_CORRECT = 0
 
 
-TESTS_DIR = ["./tests/safety/", "./tests/buechi/"]
+TESTS_DIR = ["./tests/safety/", "./tests/buechi/", "./tests/syntcomp-format/"]
 
 ############################################################################
 from aisy import EXIT_STATUS_REALIZABLE, EXIT_STATUS_UNREALIZABLE

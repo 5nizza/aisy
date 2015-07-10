@@ -109,30 +109,26 @@ def introduce_just_latch_if():
         return just_latch
     just_latches_introduced = True
 
-    if spec.num_outputs > 0:
-        # (old) format version 1
-        assert 0, 'not implemented yet'
-    else:
-        # TODOfut: currently explicitly add the latch
-        is_latch = False
-        if spec.num_justice == 1:
-            _, latch_, _ = get_lit_type(strip_lit(aiglib.get_justice_lit(spec, 0, 0)))
-            if latch_ is not None:
-                is_latch = True
+    # TODOfut: currently explicitly add the latch
+    is_latch = False
+    if spec.num_justice == 1:
+        _, latch_, _ = get_lit_type(strip_lit(aiglib.get_justice_lit(spec, 0, 0)))
+        if latch_ is not None:
+            is_latch = True
 
-        if is_latch:
-            # no need to introduce a latch, it is a latch already
-            just_latch = latch_
-        else:
-            just_latch_lit = (int(spec.maxvar) + 1) * 2   # hm, many variable indices in between are unused
-            if spec.num_justice == 1:
-                just_latch_next = aiglib.get_justice_lit(spec, 0, 0)
-            else:  # TODOopt: for safety slightly inneficient since in the first tick the latch is zero
-                just_latch_next = 1  # True
-            aiglib.aiger_add_latch(spec, just_latch_lit,
-                                   just_latch_next, 'just_latch')
-            just_latch = aiglib.get_aiger_symbol(spec.latches,
-                                                 spec.num_latches-1)
+    if is_latch:
+        # no need to introduce a latch, it is a latch already
+        just_latch = latch_
+    else:
+        just_latch_lit = (int(spec.maxvar) + 1) * 2   # hm, many variable indices in between are unused
+        if spec.num_justice == 1:
+            just_latch_next = aiglib.get_justice_lit(spec, 0, 0)
+        else:  # TODOopt: for safety slightly inneficient since in the first tick the latch is zero
+            just_latch_next = 1  # True
+        aiglib.aiger_add_latch(spec, just_latch_lit,
+                               just_latch_next, 'just_latch')
+        just_latch = aiglib.get_aiger_symbol(spec.latches,
+                                             spec.num_latches-1)
 
     return just_latch
 
@@ -145,8 +141,9 @@ def iterate_latches_and_error():
 
 
 def parse_into_spec(aiger_file_name):
-    global spec
     logger.info('parsing..')
+
+    global spec
     #: :type: aiger
     spec = aiger_init()
 
@@ -154,10 +151,9 @@ def parse_into_spec(aiger_file_name):
     assert not err, err
 
     # assert there is no mix of formats
-    assert (spec.num_outputs == 1) ^ (spec.num_bad == 1 or spec.num_justice == 1), 'mix of two formats'
+    assert (spec.num_outputs == 1) ^ (spec.num_bad >= 1 or spec.num_justice == 1), 'mix of two formats'
     assert spec.num_outputs + spec.num_justice + spec.num_bad >= 1, 'no properties'
-    assert spec.num_bad <= 1 and \
-           spec.num_justice <= 1 and spec.num_constraints <= 1 and spec.num_constraints <= 1, 'not supported yet'
+    assert spec.num_justice <= 1 and spec.num_constraints <= 1, 'not supported yet'
 
     assert spec.num_fairness == 0, 'not supported'
 
@@ -574,7 +570,6 @@ def extract_output_funcs(non_det_strategy):
 
 def get_inv_err_f_bdds():
     f_bdd = get_bdd_for_value(just_latch.lit)
-
     # Special handling in case `just` signal is the negation
     # of the value of a latch
     # (recall, in this case we do not introduce
@@ -588,14 +583,22 @@ def get_inv_err_f_bdds():
     if spec.num_constraints == 0:
         inv_bdd = cudd.One()
     else:
+        assert spec.num_constraints == 1
         inv_sym = spec.constraints  # swig returns the first element instead of array-like
         inv_bdd = get_bdd_for_value(inv_sym.lit)
 
-    if spec.num_bad == 0:
-        err_bdd = cudd.Zero()
+    if spec.num_bad > 0:
+        err_bdd = get_bdd_for_value(aiglib.get_aiger_symbol(spec.bad, 0).lit)
+        for i in range(1, spec.num_bad):
+            bdd = get_bdd_for_value(aiglib.get_aiger_symbol(spec.bad, i).lit)
+            err_bdd = err_bdd | bdd
     else:
-        err_sym = spec.bad  # swig returns the first element instead of array-like
-        err_bdd = get_bdd_for_value(err_sym.lit)
+        assert spec.num_bad == 0, 'currently support 0 or 1 bad signals'
+
+        if spec.num_outputs == 1:
+            err_bdd = get_bdd_for_value(spec.outputs.lit)
+        else:
+            err_bdd = cudd.Zero()
 
     return inv_bdd, err_bdd, f_bdd
 
