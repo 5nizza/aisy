@@ -20,27 +20,22 @@ To run:
 
 ./aisy.py -h
 
-Some self-testing functionality is included in `run_status_tests.py`.
-
-More extensive tests will be provided in the benchmarking directory. It also runs model checker to check the results.
-
-More details you will find in the code, on web-page of the course.
+Some self-testing functionality is included in `run_tests.py`.
+It also runs model checker to check the results.
 
 Email me in case questions/suggestions/bugs: ayrat.khalimov at gmail
-
-----------------------
 """
-status = ["TODO: 1) check the case when output functions depend on error fake latch\n"
-          "TODO: 2) optim: get rid of fake latches(?)"]
-
 
 import argparse
 import logging
-import pycudd
 import sys
+
+import pycudd
+
 from aiger_swig.aiger_wrap import *
 from ansistrm import ColorizingStreamHandler
 import aiger_swig.aiger_wrap as aiglib
+
 
 # don't change status numbers since they are used by the performance script
 EXIT_STATUS_REALIZABLE = 10
@@ -52,14 +47,6 @@ spec = None
 
 #: :type: DdManager
 cudd = None
-
-# Latching just(t,i,o) signal makes things look like in most online lectures.
-# Let's emulate this by introducing a non-existing latch.
-# Note: none of outputs can depend on them.
-# TODOfut: is using `just` directly speed things up?
-#: :type: aiger_symbol
-just_latch = None
-just_latches_introduced = False
 
 #: :type: Logger
 logger = None
@@ -74,7 +61,8 @@ def setup_logging(verbose_level, filename=None):
     elif verbose_level >= 1:
         level = logging.DEBUG
 
-    formatter = logging.Formatter(fmt="%(asctime)-10s%(message)s", datefmt="%H:%M:%S")
+    formatter = logging.Formatter(fmt="%(asctime)-10s%(message)s",
+                                  datefmt="%H:%M:%S")
 
     stdout_handler = ColorizingStreamHandler()
     stdout_handler.setFormatter(formatter)
@@ -102,40 +90,7 @@ def strip_lit(l):
     return l & ~1
 
 
-def introduce_just_latch_if():
-    global just_latch, just_latches_introduced, spec
-
-    if just_latches_introduced:
-        return just_latch
-    just_latches_introduced = True
-
-    # TODOfut: currently explicitly add the latch
-    is_latch = False
-    if spec.num_justice == 1:
-        _, latch_, _ = get_lit_type(strip_lit(aiglib.get_justice_lit(spec, 0, 0)))
-        if latch_ is not None:
-            is_latch = True
-
-    if is_latch:
-        # no need to introduce a latch, it is a latch already
-        just_latch = latch_
-    else:
-        just_latch_lit = (int(spec.maxvar) + 1) * 2   # hm, many variable indices in between are unused
-        if spec.num_justice == 1:
-            just_latch_next = aiglib.get_justice_lit(spec, 0, 0)
-        else:  # TODOopt: for safety slightly inneficient since in the first tick the latch is zero
-            just_latch_next = 1  # True
-        aiglib.aiger_add_latch(spec, just_latch_lit,
-                               just_latch_next, 'just_latch')
-        just_latch = aiglib.get_aiger_symbol(spec.latches,
-                                             spec.num_latches-1)
-
-    return just_latch
-
-
 def iterate_latches_and_error():
-    introduce_just_latch_if()
-
     for i in range(int(spec.num_latches)):
         yield get_aiger_symbol(spec.latches, i)
 
@@ -150,11 +105,12 @@ def parse_into_spec(aiger_file_name):
     err = aiger_open_and_read_from_file(spec, aiger_file_name)
     assert not err, err
 
-    # assert there is no mix of formats
+    # assert the formats
     assert (spec.num_outputs == 1) ^ (spec.num_bad >= 1 or spec.num_justice == 1), 'mix of two formats'
     assert spec.num_outputs + spec.num_justice + spec.num_bad >= 1, 'no properties'
-    assert spec.num_justice <= 1 and spec.num_constraints <= 1, 'not supported yet'
 
+    # assert aisy's pre
+    assert spec.num_justice <= 1, 'not supported'
     assert spec.num_fairness == 0, 'not supported'
 
 
@@ -167,6 +123,14 @@ def get_lit_type(stripped_lit):
 
 
 def get_bdd_for_value(lit):  # lit is variable index with sign
+    """
+    We use the following mapping of AIGER indices to CUDD indices:
+    AIGER's stripped_lit -> CUDD's index
+    For latches: primed value of a variable with CUDD's index is index+1
+    Note that none of the AIGER inputs have primed version equivalents in CUDD.
+      Thus we lose some number of indices in CUDD.
+    Note that only AIGER's latches and inputs have equivalents in CUDD.
+    """
     stripped_lit = strip_lit(lit)
 
     if stripped_lit == 0:
@@ -228,7 +192,8 @@ def compose_transition_bdd():
 
 
 def get_cube(variables):
-    assert len(variables)
+    if not variables:
+        return cudd.One()
 
     cube = cudd.One()
     for v in variables:
@@ -239,7 +204,7 @@ def get_cube(variables):
 def _get_bdd_vars(filter_func):
     var_bdds = []
 
-    for i in range(int(spec.num_inputs)):
+    for i in range(spec.num_inputs):
         input_aiger_symbol = get_aiger_symbol(spec.inputs, i)
         if filter_func(input_aiger_symbol.name.strip()):
             out_var_bdd = get_bdd_for_value(input_aiger_symbol.lit)
@@ -262,6 +227,9 @@ def get_all_latches_as_bdds():
 
 
 def _prime_unprime_latches_in_bdd(bdd, should_prime):
+    if bdd == cudd.Zero() or bdd == cudd.One():
+        return bdd
+
     latch_bdds = get_all_latches_as_bdds()
     num_latches = len(latch_bdds)
     #: :type: DdArray
@@ -295,68 +263,15 @@ def unprime_latches_in_bdd(bdd):
     return unprimed_bdd
 
 
-def modified_pre_env_bdd(dst_states_bdd, transition_bdd, inv_bdd, err_bdd):
-    """
-    Calculate env predecessor states of Dst(t') accounting for invariant and error transitions:
-
-       ∃t' ∃i ∀o:
-          inv(t,i,o) & (  err(t,i,o) | tau(t,i,t',o) & Dst(t')  )
-
-    :return: BDD representation of the predecessor states
-    """
-
-    #: :type: DdNode
-    primed_dst_states_bdd = prime_latches_in_bdd(dst_states_bdd)
-
-    #: :type: DdNode
-    tau_and_dst = transition_bdd & primed_dst_states_bdd  # all predecessors (i.e., if sys and env cooperate)
-
-    assert len(get_controllable_vars_bdds()) > 0  # TODOfut: without outputs make it model checker
-
-    err_or_exists_tau = err_bdd | tau_and_dst
-
-    inv_and_error_or_tau = inv_bdd & err_or_exists_tau
-
-    out_vars_cube = get_cube(get_controllable_vars_bdds())
-    forall_outs = inv_and_error_or_tau.UnivAbstract(out_vars_cube)  # ∀o inv & ..
-
-    inp_vars_bdds = get_uncontrollable_vars_bdds()
-    if inp_vars_bdds:
-        inp_vars_cube = get_cube(inp_vars_bdds)
-        exist_inputs = forall_outs.ExistAbstract(inp_vars_cube)  # ∃i ∀o: inv & ..
-    else:
-        exist_inputs = forall_outs
-
-    next_state_vars_cube = prime_latches_in_bdd(get_cube(get_all_latches_as_bdds()))
-    exist_tn__tau_and_dst = exist_inputs.ExistAbstract(next_state_vars_cube)  # ∃t'  ..
-
-    return exist_tn__tau_and_dst
-
-
-def calc_attr_err(transition_bdd, inv_bdd, err_bdd):
-    # since err_bdd describes transitions rather than states
-    Err = modified_pre_env_bdd(cudd.Zero(), transition_bdd, inv_bdd, err_bdd)
-
-    AttrErr = Err
-    while True:
-        nAttrErr = AttrErr | modified_pre_env_bdd(AttrErr, transition_bdd, inv_bdd, err_bdd)
-        if nAttrErr == AttrErr:
-            return AttrErr
-        AttrErr = nAttrErr
-
-
 def modified_pre_sys_bdd(dst_states_bdd, transition_bdd, inv_bdd, err_bdd):
     """
-    Calculate predecessor states of Dst(t') accounting for invariant and error transitions:
+    Calculate predecessor states of Dst(t') accounting for invariant and error
+    transitions:
 
          ∀i ∃o:
            inv(t,i,o)  ->  ~err(t,i,o) & ∃t' tau(t,i,t',o) & Dst(t')
 
     :return: BDD representation of the predecessor states
-
-    :hint: A normal version called `pre_sys_bdd` that does not account for invariants and err signals can be found here:
-    https://bitbucket.org/art_haali/aisy-classroom/src/95baf6e8a02e92d02c2fce1749f8468cadc5e704/aisy.py
-    Use it as an inspiration/documentation of how to use cudd.
     """
 
     #: :type: DdNode
@@ -376,11 +291,6 @@ def modified_pre_sys_bdd(dst_states_bdd, transition_bdd, inv_bdd, err_bdd):
 
     out_vars_cube = get_cube(get_controllable_vars_bdds())
     exist_outs = inv_impl_nerr_tau.ExistAbstract(out_vars_cube)  # ∃o: inv-> ~err &  ∃t' tau(t,i,t',o)
-
-    # I think the version below is wrong:
-    # inv_impl_nerr = ~(inv_bdd & err_bdd)
-    # out_vars_cube = get_cube(get_controllable_vars_bdds())
-    # exist_outs = (inv_impl_nerr & exist_tn__tau_and_dst).ExistAbstract(out_vars_cube)  # ∃o: inv->~err &  ∃t' tau(t,i,t',o)
 
     inp_vars_bdds = get_uncontrollable_vars_bdds()
     if inp_vars_bdds:
@@ -422,12 +332,14 @@ def calc_win_region(init_bdd, transition_bdd, inv_bdd, err_bdd, f_bdd):
 
     # The notations are taken from "Infinite Games" by Martin Zimmerman/Felix Klein.
     # They use:
-    # Rec^0 = F
-    # W_1^n = V \ Attr_0(Rec^n(F))
-    # Rec^n+1 = F \ CPre_1 (W^n_1(Rec^n))
+    # (0 is the system player, 1 is the environment player, 
+    #  and thus, W1 - env win region, etc.)
+    # Rec_0 = F
+    # W1_n = V \ Attr0(Rec_n(F))
+    # Rec_n+1 = F \ CPre1(W1_n)
     #
-    # If you transform you will get
-    # Rec^n+1 = F & CPre_0(Attr_0(Rec^n))
+    # If you transform, then you get
+    # Rec_n+1 = F & CPre0(Attr0(Rec_n))
     # and we use it below.
     #
 
@@ -568,39 +480,28 @@ def extract_output_funcs(non_det_strategy):
     return output_models
 
 
-def get_inv_err_f_bdds():
-    f_bdd = get_bdd_for_value(just_latch.lit)
-    # Special handling in case `just` signal is the negation
-    # of the value of a latch
-    # (recall, in this case we do not introduce
-    #  an additional justice latch)
-    if spec.num_justice == 1 and \
-            strip_lit(aiglib.get_justice_lit(spec, 0, 0)) \
-                    == strip_lit(just_latch.lit):
-        if is_negated(aiglib.get_justice_lit(spec, 0, 0)):
-            f_bdd = ~f_bdd
+def get_inv_err_j_bdds():
+    assert spec.num_justice <= 1
 
-    if spec.num_constraints == 0:
-        inv_bdd = cudd.One()
-    else:
-        assert spec.num_constraints == 1
-        inv_sym = spec.constraints  # swig returns the first element instead of array-like
-        inv_bdd = get_bdd_for_value(inv_sym.lit)
+    j_bdd = get_bdd_for_value(aiglib.get_justice_lit(spec, 0, 0)) \
+            if spec.num_justice == 1 \
+            else cudd.One()
 
+    inv_bdd = cudd.One()
+    if spec.num_constraints > 0:
+        for i in range(spec.num_constraints):
+            bdd = get_bdd_for_value(aiglib.get_aiger_symbol(spec.constraints, i).lit)
+            inv_bdd = inv_bdd & bdd
+
+    err_bdd = cudd.Zero()
     if spec.num_bad > 0:
-        err_bdd = get_bdd_for_value(aiglib.get_aiger_symbol(spec.bad, 0).lit)
-        for i in range(1, spec.num_bad):
+        for i in range(spec.num_bad):
             bdd = get_bdd_for_value(aiglib.get_aiger_symbol(spec.bad, i).lit)
             err_bdd = err_bdd | bdd
-    else:
-        assert spec.num_bad == 0, 'currently support 0 or 1 bad signals'
+    elif spec.num_outputs == 1:
+        err_bdd = get_bdd_for_value(aiglib.get_aiger_symbol(spec.outputs, 0).lit)
 
-        if spec.num_outputs == 1:
-            err_bdd = get_bdd_for_value(spec.outputs.lit)
-        else:
-            err_bdd = cudd.Zero()
-
-    return inv_bdd, err_bdd, f_bdd
+    return inv_bdd, err_bdd, j_bdd
 
 
 def assert_increasing(attractors):   # TODOopt: debug only
@@ -635,9 +536,14 @@ def synthesize(realiz_check):
     transition_bdd = compose_transition_bdd()
     # transition_bdd.PrintMinterm()
 
-    inv_bdd, err_bdd, f_bdd = get_inv_err_f_bdds()
+    inv_bdd, err_bdd, j_bdd = get_inv_err_j_bdds()
 
-    attractors = calc_win_region(init_state_bdd, transition_bdd, inv_bdd, err_bdd, f_bdd)
+    # ensure that depends on latches only: (\exists i1..in: a&b&c&i1==False) is not True  # TODO: lift to justice(t,i,o)
+    all_inputs_bdds = get_uncontrollable_vars_bdds()+get_controllable_vars_bdds()
+    assert (~(j_bdd.Support())).ExistAbstract(get_cube(all_inputs_bdds)) != cudd.One(), \
+        'Mealy-like J signals are not supported'
+
+    attractors = calc_win_region(init_state_bdd, transition_bdd, inv_bdd, err_bdd, j_bdd)
     if attractors is None:
         return False, None
 
@@ -684,7 +590,9 @@ def get_optimized_and_lit(a_lit, b_lit):
     assert 0, 'impossible'
 
 
-_reported = False
+def get_all_vars(bdd):
+    #: :type: DdNode
+    print(bdd.BddToCubeArray())
 
 
 def walk(a_bdd):
@@ -704,18 +612,8 @@ def walk(a_bdd):
         return res
 
     # get an index of variable,
-    # all variables used in bdds also introduced in aiger,
-    # except fake error latch literal,
-    # but fake error latch will not be used in output functions (at least we don't need this..)
+    # all variables used in BDDs are also present in AIGER
     a_lit = a_bdd.NodeReadIndex()
-
-    global _reported
-    if not _reported:
-        logger.info('bdd node depends on the justice latch')
-        _reported = True
-    # if a_lit == fair_latch.lit:
-    #     import pdb
-    #     pdb.set_trace()
 
     #: :type: DdNode
     t_bdd = a_bdd.T()
@@ -793,7 +691,7 @@ def init_cudd():
 
 
 def main(aiger_file_name, out_file_name, output_full_circuit, realiz_check):
-    """ Open aiger file, synthesize the circuit and write the result to output file.
+    """ Open AIGER file, synthesize the circuit and write the result to output file.
 
     :returns: boolean value 'is realizable?'
     """
@@ -824,42 +722,20 @@ def main(aiger_file_name, out_file_name, output_full_circuit, realiz_check):
     return False
 
 
-def exit_if_status_request(args):
-    if args.status:
-        print('-' * 80)
-        print('The current status of development')
-        print('-- ' + '\n-- '.join(status))
-        print('-' * 80)
-        exit(0)
-    else:
-        pass
-
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Aiger Format Based Simple Synthesizer')
-    parser.add_argument('aiger', metavar='aiger', type=str, nargs='?', default=None,
+    parser.add_argument('aiger', metavar='aiger', type=str,
                         help='input specification in AIGER format')
     parser.add_argument('--out', '-o', metavar='out', type=str, required=False, default=None,
                         help='output file in AIGER format (if realizable)')
     parser.add_argument('--full', action='store_true', default=False,
                         help='produce a full circuit that has outputs other than error bit')
-    parser.add_argument('--status', '-s', action='store_true', default=False,
-                        help='Print current status of development')
-
     parser.add_argument('--realizability', '-r', action='store_true', default=False,
                         help='Check Realizability only (do not produce circuits)')
-
-    # in quiet the tool should print only the model if exists otherwise nothing
     parser.add_argument('--quiet', '-q', action='store_true', default=False,
-                        help='Do not print anything but the result (if realizable)')
+                        help='Do not print anything but the model (if realizable)')
 
     args = parser.parse_args()
-    
-    exit_if_status_request(args)
-    
-    if not args.aiger:
-        print('aiger file is required, exit')
-        exit(-1)
 
     logger = setup_logging(-1 if args.quiet else 0)
 
