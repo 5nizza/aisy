@@ -269,7 +269,7 @@ def modified_pre_sys_bdd(dst_states_bdd, transition_bdd, inv_bdd, err_bdd):
     transitions:
 
          ∀i ∃o:
-           inv(t,i,o)  ->  ~err(t,i,o) & ∃t' tau(t,i,t',o) & Dst(t')
+           inv(t,i,o)  ->  [ ~err(t,i,o) & ∃t' tau(t,i,t',o) & Dst(t') ]
 
     :return: BDD representation of the predecessor states
     """
@@ -379,33 +379,28 @@ def get_nondet_strategy(attractors, transition_bdd, inv_bdd, err_bdd):
 
     logger.info('get_nondet_strategy..')
 
-    #   OR_(Src,Dst):
-    #                (inv -> Src & ~Dst & ~err & ∃t' tau(t,i,t',o) & Dst(t'))
+    #   inv -> AND_(Src,Dst): onion_i -> ~err & ∃t' tau(t,i,t',o) & Dst(t'))
+    # where onion = Src & ~Dst
 
+    assert_increasing(attractors)
     attractors = list(attractors)
     attractors.reverse()
 
-    src_dst_disjuncts = cudd.Zero()
+    src_dst_conjuncts = cudd.One()
     for i in range(len(attractors)):
-        if i != len(attractors)-1:
-            src, dst = attractors[i], attractors[i+1]
-            onion = src & ~dst
-        else:
-            src, dst = attractors[i], attractors[0]
-            onion = src
+        src, dst = attractors[i], attractors[(i+1) % len(attractors)]
+
+        onion = src & ~dst if i != len(attractors)-1 \
+                else src
 
         dstP = prime_latches_in_bdd(dst)
         tP = prime_latches_in_bdd(get_cube(get_all_latches_as_bdds()))
 
         exists_tP__tau_and_dstP = (transition_bdd & dstP).ExistAbstract(tP)  # ∃t' tau(t,i,t',o) & Dst(t'))
 
-        right = onion & ~err_bdd & exists_tP__tau_and_dstP
+        src_dst_conjuncts &= ~onion | (~err_bdd & exists_tP__tau_and_dstP)
 
-        impl = ~inv_bdd | right
-
-        src_dst_disjuncts = src_dst_disjuncts | impl
-
-    return src_dst_disjuncts
+    return ~inv_bdd | src_dst_conjuncts
 
 
 def compose_init_state_bdd():
@@ -547,13 +542,10 @@ def synthesize(realiz_check):
     if attractors is None:
         return False, None
 
-    assert_increasing(attractors)
-
     if realiz_check:
         return True, None
 
     non_det_strategy = get_nondet_strategy(attractors, transition_bdd, inv_bdd, err_bdd)
-    # non_det_strategy.PrintMinterm()
 
     func_by_var = extract_output_funcs(non_det_strategy)
 
