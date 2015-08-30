@@ -340,7 +340,7 @@ def calc_win_region(init_bdd, trans_bdd, inv_bdd, err_bdd, j_bdd, f_bdd):
     # and we use it below.
     #
 
-    Rec = f_bdd   # the current recurrence set
+    Rec = j_bdd   # the current recurrence set
     while True:   # the outer loop that computes recurrence sets
         attractors = list()   # we save the attractors in order to compute the strategy later
         AttrRec = Rec
@@ -472,7 +472,7 @@ def extract_output_funcs(non_det_strategy):
 
 def get_inv_err_f_j_bdds():
     assert spec.num_justice <= 1
-    assert spec.num_farness <= 1
+    assert spec.num_fairness <= 1
 
     j_bdd = get_bdd_for_value(aiglib.get_justice_lit(spec, 0, 0)) \
             if spec.num_justice == 1 \
@@ -544,7 +544,7 @@ def synthesize(realiz_check):
     assert_liveness_is_Moore(j_bdd, 'J')
 
     attractors = calc_win_region(init_bdd, trans_bdd, inv_bdd, err_bdd, j_bdd, f_bdd)
-    assert 0
+
     if attractors is None:
         return False, None
 
