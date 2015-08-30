@@ -90,7 +90,7 @@ def strip_lit(l):
     return l & ~1
 
 
-def iterate_latches_and_error():
+def iterate_latches():
     for i in range(int(spec.num_latches)):
         yield get_aiger_symbol(spec.latches, i)
 
@@ -106,12 +106,11 @@ def parse_into_spec(aiger_file_name):
     assert not err, err
 
     # assert the formats
-    assert (spec.num_outputs == 1) ^ (spec.num_bad >= 1 or spec.num_justice == 1), 'mix of two formats'
+    assert (spec.num_outputs == 1) ^ (spec.num_bad or spec.num_justice or spec.num_fairness), 'mix of two formats'
     assert spec.num_outputs + spec.num_justice + spec.num_bad >= 1, 'no properties'
 
-    # assert aisy's pre
     assert spec.num_justice <= 1, 'not supported'
-    assert spec.num_fairness == 0, 'not supported'
+    assert spec.num_fairness <= 1, 'not supported'
 
 
 def get_lit_type(stripped_lit):
@@ -172,11 +171,11 @@ def compose_transition_bdd():
     """ :return: BDD representing transition function of spec: ``T(x,i,c,x')``
     """
 
-    logger.info('compose_transition_bdd, nof_latches={0}...'.format(len(list(iterate_latches_and_error()))))
+    logger.info('compose_transition_bdd, nof_latches={0}...'.format(len(list(iterate_latches()))))
 
     #: :type: DdNode
     transition = cudd.One()
-    for l in iterate_latches_and_error():
+    for l in iterate_latches():
         #: :type: aiger_symbol
         l = l
 
@@ -222,7 +221,7 @@ def get_uncontrollable_vars_bdds():
 
 
 def get_all_latches_as_bdds():
-    bdds = [get_bdd_for_value(l.lit) for l in iterate_latches_and_error()]
+    bdds = [get_bdd_for_value(l.lit) for l in iterate_latches()]
     return bdds
 
 
@@ -302,16 +301,14 @@ def modified_pre_sys_bdd(dst_states_bdd, transition_bdd, inv_bdd, err_bdd):
     return forall_inputs
 
 
-def calc_win_region(init_bdd, transition_bdd, inv_bdd, err_bdd, f_bdd):
+def calc_win_region(init_bdd, trans_bdd, inv_bdd, err_bdd, j_bdd, f_bdd):
     """
-    Calculate a winning region for the Buchi game.
-    The win region for the Buchi game is:
+    Calculate a winning region for the GR1 game with single liveness assumption and guarantee.
+    The win region is:
 
         gfp.Y lfp.X [F & pre_sys(Y)  |  pre_sys(X)]
 
     Note that for Buchi game with invariants we use modified_pre_sys operator.
-    To see docs for function `modified_pre_sys_bdd` and for more details visit
-    https://verify.iaik.tugraz.at/research/bin/view/Ausgewaehltekapitel/BuchiWithInvariantsAndSafety
 
     :return: list of BDDs [Recur(F), Force1(Recur(F)), Force2(Recur(F)), ...],
              thus, [..][-1] is the winning region
@@ -349,7 +346,7 @@ def calc_win_region(init_bdd, transition_bdd, inv_bdd, err_bdd, f_bdd):
         AttrRec = Rec
         while True:  # computing the attractor of a current recurrence set
             attractors.append(AttrRec)
-            nAttrRec = AttrRec | modified_pre_sys_bdd(AttrRec, transition_bdd, inv_bdd, err_bdd)
+            nAttrRec = AttrRec | modified_pre_sys_bdd(AttrRec, trans_bdd, inv_bdd, err_bdd)
             if nAttrRec == AttrRec:
                 break
             AttrRec = nAttrRec
@@ -359,7 +356,7 @@ def calc_win_region(init_bdd, transition_bdd, inv_bdd, err_bdd, f_bdd):
         if not (init_bdd <= AttrRec):  # I 'believe' this speeds up by 10% on unrealizable examples
             return None                # is there the proper way to check init \in AttrRec?
 
-        nRec = Rec & modified_pre_sys_bdd(AttrRec, transition_bdd, inv_bdd, err_bdd)
+        nRec = Rec & modified_pre_sys_bdd(AttrRec, trans_bdd, inv_bdd, err_bdd)
         if nRec == Rec:
             return attractors
         Rec = nRec
@@ -379,7 +376,7 @@ def get_nondet_strategy(attractors, transition_bdd, inv_bdd, err_bdd):
 
     logger.info('get_nondet_strategy..')
 
-    #   inv -> AND_(Src,Dst): onion_i -> ~err & ∃t' tau(t,i,t',o) & Dst(t'))
+    # inv -> AND_(Src,Dst): onion_i -> ~err & ∃t' tau(t,i,t',o) & Dst(t'))
     # where onion = Src & ~Dst
 
     assert_increasing(attractors)
@@ -409,9 +406,7 @@ def compose_init_state_bdd():
     logger.info('compose_init_state_bdd..')
 
     init_state_bdd = cudd.One()
-    for l in iterate_latches_and_error():
-        #: :type: aiger_symbol
-        l = l
+    for l in iterate_latches():
         l_curr_value_bdd = get_bdd_for_value(l.lit)
         init_state_bdd &= make_bdd_eq(l_curr_value_bdd, cudd.Zero())
 
@@ -475,12 +470,17 @@ def extract_output_funcs(non_det_strategy):
     return output_models
 
 
-def get_inv_err_j_bdds():
+def get_inv_err_f_j_bdds():
     assert spec.num_justice <= 1
+    assert spec.num_farness <= 1
 
     j_bdd = get_bdd_for_value(aiglib.get_justice_lit(spec, 0, 0)) \
             if spec.num_justice == 1 \
             else cudd.One()
+
+    f_bdd = get_bdd_for_value(aiglib.get_aiger_symbol(spec.fairness, 0)) \
+        if spec.num_fairness == 1 \
+        else cudd.One()
 
     inv_bdd = cudd.One()
     if spec.num_constraints > 0:
@@ -496,7 +496,7 @@ def get_inv_err_j_bdds():
     elif spec.num_outputs == 1:
         err_bdd = get_bdd_for_value(aiglib.get_aiger_symbol(spec.outputs, 0).lit)
 
-    return inv_bdd, err_bdd, j_bdd
+    return inv_bdd, err_bdd, f_bdd, j_bdd
 
 
 def assert_increasing(attractors):   # TODOopt: debug only
@@ -516,6 +516,12 @@ def assert_increasing(attractors):   # TODOopt: debug only
         previous = a
 
 
+def assert_liveness_is_Moore(bdd, sig):
+    all_inputs_bdds = get_uncontrollable_vars_bdds() + get_controllable_vars_bdds()
+    assert (~(bdd.Support())).ExistAbstract(get_cube(all_inputs_bdds)) != cudd.One(), \
+        'Mealy-like %s signals are not supported' % sig
+
+
 def synthesize(realiz_check):
     """ Calculate winning region and extract output functions.
 
@@ -525,27 +531,27 @@ def synthesize(realiz_check):
     logger.info('synthesize..')
 
     #: :type: DdNode
-    init_state_bdd = compose_init_state_bdd()
+    init_bdd = compose_init_state_bdd()
     # init_state_bdd.PrintMinterm()
     #: :type: DdNode
-    transition_bdd = compose_transition_bdd()
+    trans_bdd = compose_transition_bdd()
     # transition_bdd.PrintMinterm()
 
-    inv_bdd, err_bdd, j_bdd = get_inv_err_j_bdds()
+    inv_bdd, err_bdd, f_bdd, j_bdd = get_inv_err_f_j_bdds()
 
     # ensure that depends on latches only: (\exists i1..in: a&b&c&i1==False) is not True  # TODO: lift to justice(t,i,o)
-    all_inputs_bdds = get_uncontrollable_vars_bdds()+get_controllable_vars_bdds()
-    assert (~(j_bdd.Support())).ExistAbstract(get_cube(all_inputs_bdds)) != cudd.One(), \
-        'Mealy-like J signals are not supported'
+    assert_liveness_is_Moore(f_bdd, 'F')
+    assert_liveness_is_Moore(j_bdd, 'J')
 
-    attractors = calc_win_region(init_state_bdd, transition_bdd, inv_bdd, err_bdd, j_bdd)
+    attractors = calc_win_region(init_bdd, trans_bdd, inv_bdd, err_bdd, j_bdd, f_bdd)
+    assert 0
     if attractors is None:
         return False, None
 
     if realiz_check:
         return True, None
 
-    non_det_strategy = get_nondet_strategy(attractors, transition_bdd, inv_bdd, err_bdd)
+    non_det_strategy = get_nondet_strategy(attractors, trans_bdd, inv_bdd, err_bdd)
 
     func_by_var = extract_output_funcs(non_det_strategy)
 
