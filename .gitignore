@@ -49,3 +49,5 @@ benchmarking/results/results*
 tests/buechi/sources/*/*.aag
 tests/buechi/sources/*/*.klive*
 tmp*
+
+config.py
