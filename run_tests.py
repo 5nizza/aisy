@@ -1,6 +1,8 @@
 #!/usr/bin/env python2.7
 import os
-from subprocess import call, Popen
+
+import config
+
 
 ############################################################################
 # When used with --mc flag, requires `iimc` model checker (http://iimc.colorado.edu/).
@@ -12,9 +14,7 @@ from tempfile import NamedTemporaryFile
 TOOL = "./aisy.py -q"  # '-q' to be quiet (prints only the models)
 
 # Used only if run with --mc
-# Usage of iimc: iimc <input_file>
-# Returns: 0 -- correct, non zero in other cases
-CHECK_MODEL = '/home/ayrat/projects/spec-framework/check_model.sh'
+CHECK_MODEL = config.SPEC_FRAMEWORK_DIR +'/check_model.sh'
 CHECK_MODEL_RC_CORRECT = 0
 
 

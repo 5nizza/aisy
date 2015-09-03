@@ -262,142 +262,141 @@ def unprime_latches_in_bdd(bdd):
     return unprimed_bdd
 
 
-def modified_pre_sys_bdd(dst_states_bdd, transition_bdd, inv_bdd, err_bdd):
+def sys_predecessor(dst_bdd, trans_bdd, env_bdd, sys_bdd):
     """
-    Calculate predecessor states of Dst(t') accounting for invariant and error
-    transitions:
+    Calculate controllable predecessor of dst
 
-         ∀i ∃o:
-           inv(t,i,o)  ->  [ ~err(t,i,o) & ∃t' tau(t,i,t',o) & Dst(t') ]
+       ∀i ∃o: env(t,i,o) -> [ sys(t,i,o) & ∃t' tau(t,i,o,t') & dst(t') ]
 
     :return: BDD representation of the predecessor states
     """
 
-    #: :type: DdNode
-    primed_dst_states_bdd = prime_latches_in_bdd(dst_states_bdd)
-
-    #: :type: DdNode
-    tau_and_dst = transition_bdd & primed_dst_states_bdd  # all predecessors (i.e., if sys and env cooperate)
+    next_dst = prime_latches_in_bdd(dst_bdd)
+    tau_and_dst = trans_bdd & next_dst
 
     # cudd requires to create a cube first
     next_state_vars_cube = prime_latches_in_bdd(get_cube(get_all_latches_as_bdds()))
-    exist_tn__tau_and_dst = tau_and_dst.ExistAbstract(next_state_vars_cube)  # ∃t'  tau(t,i,t',o) & dst(t')
+    E_tn_tau_and_dst = tau_and_dst.ExistAbstract(next_state_vars_cube)  # ∃t'  tau(t,i,t',o) & dst(t')
 
-    assert len(get_controllable_vars_bdds()) > 0  # TODOfut: without outputs make it model checker
+    sys_and_E_tn_tau_and_dst = sys_bdd & E_tn_tau_and_dst
+    env_impl_sys_and_tau = ~env_bdd | sys_and_E_tn_tau_and_dst
 
-    nerr_and_tau = ~err_bdd & exist_tn__tau_and_dst
-    inv_impl_nerr_tau = ~inv_bdd | nerr_and_tau
-
+    # ∃o: env -> (sys & ∃t' tau(t,i,t',o)):
     out_vars_cube = get_cube(get_controllable_vars_bdds())
-    exist_outs = inv_impl_nerr_tau.ExistAbstract(out_vars_cube)  # ∃o: inv-> ~err &  ∃t' tau(t,i,t',o)
+    E_o_implication = env_impl_sys_and_tau.ExistAbstract(out_vars_cube)
 
-    inp_vars_bdds = get_uncontrollable_vars_bdds()
-    if inp_vars_bdds:
-        inp_vars_cube = get_cube(inp_vars_bdds)
-        forall_inputs = exist_outs.UnivAbstract(inp_vars_cube)  # ∀i ∃o: inv -> ..
-    else:
-        forall_inputs = exist_outs
+    # ∀i ∃o: inv -> ..
+    inp_vars_cube = get_cube(get_uncontrollable_vars_bdds())
+    A_i_E_o_implication = E_o_implication.UnivAbstract(inp_vars_cube)
 
-    return forall_inputs
+    return A_i_E_o_implication
 
 
-def calc_win_region(init_bdd, trans_bdd, inv_bdd, err_bdd, j_bdd, f_bdd):
+def calc_win_region(trans_bdd,
+                    env_bdd, sys_bdd,
+                    fair_bdd, just_bdd):
     """
-    Calculate a winning region for the GR1 game with single liveness assumption and guarantee.
-    The win region is:
+    The mu-calculus formula for 1-Streett is
+      gfp.Z lfp.Y gfp.X [ just & Cpre(Z') | Cpre(Y') | !fair & Cpre(X') ]
 
-        gfp.Y lfp.X [F & pre_sys(Y)  |  pre_sys(X)]
+    Recall that the mu-calculus formula for Buechi is
+      gfp.Z lfp.Y [ just & Cpre(Z') | Cpre(Y') ]
 
-    Note that for Buchi game with invariants we use modified_pre_sys operator.
+    What 1-Streett formula does is:
+    internal lfp.Y computes:
+    0. Y0 = 0
+    1. Y1 = just, lassos that fall out into just
+    2. Y2 = just, lassos that fall out into just | Cpre(Y1)
+    3. Y3 = just, lassos that fall out into just | Cpre(Y2)
+    ...
+    One invariant is:
+    from Y[r] sys either reaches just via path that visits <r fair states,
+                      or loops in !fair forever except possibly for <r moments where it visits a fair state.
 
-    :return: list of BDDs [Recur(F), Force1(Recur(F)), Force2(Recur(F)), ...],
-             thus, [..][-1] is the winning region
-             or None if unrealizable
+    The external gfp.Z is decreasing, and is somewhat similar to Buechi win set computation:
+    it gradually removes states from which we cannot visit just once, or twice, thrice... 
+    and it accounts for the possibility to end in !fair lassos.
+
+    See also: [notes/1-streett-pair-mu-calculus.jpg](gfp.Y calculation)
+
+    :return: Z:bdd, Y:list(increasing)
     """
 
     logger.info('calc_win_region..')
-    # TODOopt1: try that weird: compute attractors for rings,
-    # then unite with the previous attractor (attr_i+1 = Force(attr_i\attr_i-1) \cup attr_i)
 
-    # - how about computing certainly losing positions?
-    # Does not help.
-    # Attr_1(inv & err)
-    # safety_losing_positions = calc_attr_err(transition_bdd, inv_bdd, err_bdd)
-    # if init_bdd <= safety_losing_positions:
-    #     print 'init bdd is in safety losing set. no chance -- unrealizable.'
-    #     return None
+    Cpre = lambda dst: sys_predecessor(dst, trans_bdd, env_bdd, sys_bdd)
 
-    # The notations are taken from "Infinite Games" by Martin Zimmerman/Felix Klein.
-    # They use:
-    # (0 is the system player, 1 is the environment player, 
-    #  and thus, W1 - env win region, etc.)
-    # Rec_0 = F
-    # W1_n = V \ Attr0(Rec_n(F))
-    # Rec_n+1 = F \ CPre1(W1_n)
-    #
-    # If you transform, then you get
-    # Rec_n+1 = F & CPre0(Attr0(Rec_n))
-    # and we use it below.
-    #
+    Z = cudd.One()
+    prevZ = None
+    while Z != prevZ:
+        Ys = list()
+        Y = cudd.Zero()
+        prevY = None
+        while Y != prevY:
+            Ys.append(Y)
 
-    Rec = j_bdd   # the current recurrence set
-    while True:   # the outer loop that computes recurrence sets
-        attractors = list()   # we save the attractors in order to compute the strategy later
-        AttrRec = Rec
-        while True:  # computing the attractor of a current recurrence set
-            attractors.append(AttrRec)
-            nAttrRec = AttrRec | modified_pre_sys_bdd(AttrRec, trans_bdd, inv_bdd, err_bdd)
-            if nAttrRec == AttrRec:
-                break
-            AttrRec = nAttrRec
+            Xs = list()
+            X = cudd.One()
+            prevX = None
+            while X != prevX:
+                Xs.append(X)
 
-        logger.info('calc_win_region: # attractors: ' + str(len(attractors)))
+                prevX = X
+                X = just_bdd & Cpre(Z) | Cpre(Y) | ~fair_bdd & Cpre(prevX)
+            prevY = Y
+            Y = X
+        prevZ = Z
+        Z = Y
 
-        if not (init_bdd <= AttrRec):  # I 'believe' this speeds up by 10% on unrealizable examples
-            return None                # is there the proper way to check init \in AttrRec?
-
-        nRec = Rec & modified_pre_sys_bdd(AttrRec, trans_bdd, inv_bdd, err_bdd)
-        if nRec == Rec:
-            return attractors
-        Rec = nRec
+    return Z, Ys
 
 
-def get_nondet_strategy(attractors, transition_bdd, inv_bdd, err_bdd):
-    """ Calculate the non-deterministic strategy for the given winning region (or the attractors for Buchi games).
-    The non-deterministic strategy is the set of triples `(t,i,o)` s.t.
-    if, for given `t,i` the system outputs any value `o` for which `(t,i,o)` is in the set,
-    then the system wins.
-    Thus, a non-deterministic strategy describes, for each state and input, all winning output values.
+def get_nondet_strategy(Z_bdd, Ys,
+                        trans_bdd,
+                        env_bdd, sys_bdd,
+                        fair_bdd, just_bdd):
 
-    :arg:attractors should be in increasing order
+    """
+    The strategy extraction is:
+
+    - rho1 = just & sys(t,i,o) & Z(t')
+
+    - rho2 = OR{r>1}: Y[r]&~Y[r-1] & sys(t,i,o) & Y[r-1](t')
+      (Y[0] = 0,
+       Y[1] = lfp.X [just & Cpre(Z') | !fair & Cpre(X')],
+       and we take care of this in rho1 or in rho3)
+
+    - rho3 = OR{r}: Y[r]&~Y[r-1] & !fair & sys(t,i,o) & Y[r](t')
+      Note: we cannot go higher >r, because this does not guarantee: GFfair -> GFjust
+            (we could have GF fair and never visit just)
+            (recall that Y[r] may contain fair states)
+
+    - strategy = env(t,i,o) & Z(t) -> ∃t': trans(t,i,o,t') & rho1(t,i,o,t')|rho2(t,i,o,t')|rho3(t,i,o,t')
+
     :return: non deterministic strategy bdd
     :note: The strategy is not-deterministic -- determinization step is done later.
     """
 
     logger.info('get_nondet_strategy..')
 
-    # inv -> AND_(Src,Dst): onion_i -> ~err & ∃t' tau(t,i,t',o) & Dst(t'))
-    # where onion = Src & ~Dst
+    assert_increasing(Ys)
 
-    assert_increasing(attractors)
-    attractors = list(attractors)
-    attractors.reverse()
+    onion = lambda i: Ys[i] & ~Ys[i-1] if i>0 else Ys[i]
 
-    src_dst_conjuncts = cudd.One()
-    for i in range(len(attractors)):
-        src, dst = attractors[i], attractors[(i+1) % len(attractors)]
+    rho1 = just_bdd & sys_bdd & prime_latches_in_bdd(Z_bdd)
 
-        onion = src & ~dst if i != len(attractors)-1 \
-                else src
+    rho2 = cudd.Zero()
+    for r in range(2, len(Ys)):
+        rho2 |= onion(r) & sys_bdd & prime_latches_in_bdd(Ys[r-1])
 
-        dstP = prime_latches_in_bdd(dst)
-        tP = prime_latches_in_bdd(get_cube(get_all_latches_as_bdds()))
+    rho3 = cudd.Zero()
+    for r in range(0, len(Ys)):
+        rho3 |= onion(r) & ~fair_bdd & sys_bdd & prime_latches_in_bdd(Ys[r])
 
-        exists_tP__tau_and_dstP = (transition_bdd & dstP).ExistAbstract(tP)  # ∃t' tau(t,i,t',o) & Dst(t'))
+    strategy = ~env_bdd | ~Z_bdd | (trans_bdd & (rho1 | rho2 | rho3)).ExistAbstract(
+        prime_latches_in_bdd(get_cube(get_all_latches_as_bdds())))
 
-        src_dst_conjuncts &= ~onion | (~err_bdd & exists_tP__tau_and_dstP)
-
-    return ~inv_bdd | src_dst_conjuncts
+    return strategy
 
 
 def compose_init_state_bdd():
@@ -413,7 +412,7 @@ def compose_init_state_bdd():
     return init_state_bdd
 
 
-def extract_output_funcs(non_det_strategy):
+def extract_output_funcs(non_det_strategy_bdd):
     """
     From a given non-deterministic strategy (the set of triples `(x,i,o)`),
     for each output variable `o`, calculate the set of pairs `(x,i)` where `o` will hold.
@@ -433,9 +432,9 @@ def extract_output_funcs(non_det_strategy):
         if others:
             others_cube = get_cube(others)
             #: :type: DdNode
-            c_arena = non_det_strategy.ExistAbstract(others_cube)
+            c_arena = non_det_strategy_bdd.ExistAbstract(others_cube)
         else:
-            c_arena = non_det_strategy
+            c_arena = non_det_strategy_bdd
 
         # c_arena.PrintMinterm()
 
@@ -465,7 +464,7 @@ def extract_output_funcs(non_det_strategy):
 
         output_models[c] = c_model
 
-        non_det_strategy = non_det_strategy & make_bdd_eq(c, c_model)
+        non_det_strategy_bdd = non_det_strategy_bdd & make_bdd_eq(c, c_model)
 
     return output_models
 
@@ -509,7 +508,7 @@ def assert_increasing(attractors):   # TODOopt: debug only
             print 'previous:'
             previous.PrintMinterm()
 
-            print 'len(attractors)', str(len(attractors))
+            print 'len(attractors):', str(len(attractors))
 
             assert 0
 
@@ -537,21 +536,26 @@ def synthesize(realiz_check):
     trans_bdd = compose_transition_bdd()
     # transition_bdd.PrintMinterm()
 
-    inv_bdd, err_bdd, f_bdd, j_bdd = get_inv_err_f_j_bdds()
+    env_bdd, err_bdd, f_bdd, j_bdd = get_inv_err_f_j_bdds()
 
     # ensure that depends on latches only: (\exists i1..in: a&b&c&i1==False) is not True  # TODO: lift to justice(t,i,o)
-    assert_liveness_is_Moore(f_bdd, 'F')
     assert_liveness_is_Moore(j_bdd, 'J')
+    assert_liveness_is_Moore(f_bdd, 'F')
 
-    attractors = calc_win_region(init_bdd, trans_bdd, inv_bdd, err_bdd, j_bdd, f_bdd)
+    Z, Ys = calc_win_region(trans_bdd,
+                            env_bdd, ~err_bdd,
+                            f_bdd, j_bdd)
 
-    if attractors is None:
+    if not (init_bdd <= Z):
         return False, None
 
     if realiz_check:
         return True, None
 
-    non_det_strategy = get_nondet_strategy(attractors, trans_bdd, inv_bdd, err_bdd)
+    non_det_strategy = get_nondet_strategy(Z, Ys,
+                                           trans_bdd,
+                                           env_bdd, ~err_bdd,
+                                           f_bdd, j_bdd)
 
     func_by_var = extract_output_funcs(non_det_strategy)
 

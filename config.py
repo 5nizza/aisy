@@ -1,1 +1,1 @@
-SPEC_FRAMEWORK_PATH="/home/ayrat/projects/spec-framework"
+SPEC_FRAMEWORK_DIR="/home/ayrat/projects/spec-framework/"
