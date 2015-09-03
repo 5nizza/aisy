@@ -18,7 +18,10 @@ CHECK_MODEL = config.SPEC_FRAMEWORK_DIR +'/check_model.sh'
 CHECK_MODEL_RC_CORRECT = 0
 
 
-TESTS_DIR = ["./tests/safety/", "./tests/buechi/", "./tests/syntcomp-format/"]
+TESTS_DIR = ["./tests/safety/", 
+             "./tests/buechi/", 
+             "./tests/syntcomp-format/",
+             "./tests/1-streett/"]
 
 ############################################################################
 from aisy import EXIT_STATUS_REALIZABLE, EXIT_STATUS_UNREALIZABLE
