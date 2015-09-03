@@ -477,7 +477,7 @@ def get_inv_err_f_j_bdds():
             if spec.num_justice == 1 \
             else cudd.One()
 
-    f_bdd = get_bdd_for_value(aiglib.get_aiger_symbol(spec.fairness, 0)) \
+    f_bdd = get_bdd_for_value(aiglib.get_aiger_symbol(spec.fairness, 0).lit) \
         if spec.num_fairness == 1 \
         else cudd.One()
 
