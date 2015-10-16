@@ -1,3 +1,6 @@
+aiger.h/aiger.c are written by Armin Biere. See their license inside.
+
+
 # The code is released under the MIT License
 
 Copyright (c) 2014-2015, Ayrat Khalimov, TU Graz
