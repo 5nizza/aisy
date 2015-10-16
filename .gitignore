@@ -51,5 +51,5 @@ tests/buechi/sources/*/*.klive*
 tmp*
 
 # local config files
-./config.py
-./setup.sh
+config.py
+setup.sh
