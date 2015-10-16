@@ -50,4 +50,6 @@ tests/buechi/sources/*/*.aag
 tests/buechi/sources/*/*.klive*
 tmp*
 
-./config.py   # you still need to call `git update-index --assume-unchanged ./config.py`
+# local config files
+./config.py
+./setup.sh
