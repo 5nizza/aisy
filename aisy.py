@@ -2,28 +2,11 @@
 # coding=utf-8
 
 """
-An example of synthesis tool from Aiger http://fmv.jku.at/aiger/ circuits format.
-Implementations of some functions are omitted to give you chance to implement them.
+Simply GR1 synthesizer from
+[AIGER](http://fmv.jku.at/aiger/) GR1 format.
+The format is described [here](https://bitbucket.org/art_haali/spec-framework).
 
-Basic stuff is left: parsing, and some helper functions.
-
-Installation requirements:
-  - pycudd library: http://bears.ece.ucsb.edu/pycudd.html
-  - swig library: http://www.swig.org/
-  - (probably) python2.7 headers
-
-After installing pycudd library add cudd libraries into your LD_LIBRARY_PATH:
-
-export LD_LIBRARY_PATH=/path/to/pycudd2.0.2/cudd-2.4.2/lib
-
-To run:
-
-./aisy.py -h
-
-Some self-testing functionality is included in `run_tests.py`.
-It also runs model checker to check the results.
-
-Email me in case questions/suggestions/bugs: ayrat.khalimov at gmail
+Gmail me: ayrat.khalimov
 """
 
 import argparse
@@ -726,7 +709,7 @@ def main(aiger_file_name, out_file_name, output_full_circuit, realiz_check):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Aiger Format Based Simple Synthesizer')
+    parser = argparse.ArgumentParser(description='Simple synthesizer from AIGER GR1 format')
     parser.add_argument('aiger', metavar='aiger', type=str,
                         help='input specification in AIGER format')
     parser.add_argument('--out', '-o', metavar='out', type=str, required=False, default=None,
