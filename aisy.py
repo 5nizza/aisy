@@ -378,6 +378,7 @@ def get_nondet_strategy(Z_bdd, Ys,
     """
 
     logger.info('get_nondet_strategy..')
+    # TODO: optimize for special cases: safety, buechi (hangs on the huffman example)
 
     assert_increasing(Ys)
 
