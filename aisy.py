@@ -1,10 +1,13 @@
 #!/usr/bin/env python2.7
 # coding=utf-8
 
-"""
+"""     _ + _ . .
+       |_||!_' Y 
+       | ||._! | 
+
 Simply GR1 synthesizer from
 [AIGER](http://fmv.jku.at/aiger/) GR1 format.
-The format is described [here](https://bitbucket.org/art_haali/spec-framework).
+The format is described [here](https://github.org/5nizza/spec-framework).
 
 Gmail me: ayrat.khalimov
 """
