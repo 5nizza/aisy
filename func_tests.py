@@ -1,3 +1,4 @@
+import os
 from logging import Logger
 from os import rmdir, makedirs
 
@@ -8,6 +9,12 @@ def rc_out_err_to_str(rc, out, err):
     return 'rc:{rc}\n' \
            'out:{out}\n' \
            'err:{err}'.format(rc=rc, out=out or '<empty>', err=err or '<empty>')
+
+
+def _generate_name(output_dir, test):
+    name = '{output_dir}/{test_last}'.format(output_dir=output_dir,
+                                             test_last=test.split('/')[-1])
+    return name
 
 
 def run_tests(test_files,
@@ -27,29 +34,40 @@ def run_tests(test_files,
     else:
         output_dir = get_tmp_dir_name()
 
-    failed_test = list()
+    logger.info("using " + output_dir + " as the temporal folder")
+
+    failed_tests = list()
     for test in test_files:
         logger.info('testing {test}..'.format(test=test))
-        result_file = '{output_dir}/{test_last}.model'.format(output_dir=output_dir,
-                                                              test_last=test.split('/')[-1])
+
+        log_stream = open(_generate_name(output_dir, test) + '.log', 'w')
+
+        result_file = _generate_name(output_dir, test) + '.model'
         r_rc, r_out, r_err = run_tool(test, result_file)
+
         logger.debug(rc_out_err_to_str(r_rc, r_out, r_err))
+        print(rc_out_err_to_str(r_rc, r_out, r_err),
+              file=log_stream)
 
         c_rc, c_out, c_err = check_answer(test, result_file, r_rc, r_out, r_err)
         logger.debug(rc_out_err_to_str(c_rc, c_out, c_err))
+        print(rc_out_err_to_str(c_rc, c_out, c_err),
+              file=log_stream)
 
         if c_rc != 0:
             logger.info('    FAILED')
-            failed_test.append(test)
+            failed_tests.append(test)
             if stop_on_error:
                 break
 
-    if failed_test:
-        logger.info('The following tests failed:', ''.join('\n    ' + t for t in failed_test))
+    if failed_tests:
+        logger.info('The following tests failed: %s \n%s',
+                    ''.join('\n    ' + t for t in failed_tests),
+                    'See logs in ' + output_dir)
     else:
         logger.info('ALL TESTS PASSED')
 
-    if not output_folder:
+    if not output_folder and not failed_tests:
         assert 0 == execute_shell('rm -rf ' + output_dir)[0]  # TODO: how to remove dir and its content in python?
 
-    return not failed_test
+    return not failed_tests

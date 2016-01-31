@@ -7,8 +7,6 @@ from utils import execute_shell, cat, find_files
 from config import SPEC_FRAMEWORK_DIR
 from ansistrm import setup_logging
 
-# spec-framework project contains model checker wrapper that we use (and converter SYNT->HWMCC)
-
 
 def is_realizable(test):
     spec_status = cat(test)[-1].strip()
@@ -20,19 +18,19 @@ def is_realizable(test):
 
 
 def run_tool(test_file, result_file):
-    return execute_shell('./aisy.py -q ' + test_file + ' --out ' + result_file)
+    return execute_shell('./aisy.py  ' + test_file + ' --out ' + result_file)
 
 
-def check_answer(test_file, result_file, rc, out, err):
-    EXIT_STATUS_REALIZABLE = 10
-    EXIT_STATUS_UNREALIZABLE = 20
-    assert rc in [EXIT_STATUS_REALIZABLE, EXIT_STATUS_UNREALIZABLE], rc
+def check_answer(test_file:str, result_file, rc, out, err):
+    exit_status_realizable = 10
+    exit_status_unrealizable = 20
+    assert rc in [exit_status_realizable, exit_status_unrealizable], rc
 
-    expected = [EXIT_STATUS_UNREALIZABLE, EXIT_STATUS_REALIZABLE][is_realizable(test_file)]
+    expected = [exit_status_unrealizable, exit_status_realizable][is_realizable(test_file)]
 
     if rc != expected:
-        status_to_str = {EXIT_STATUS_REALIZABLE: 'realizable',
-                         EXIT_STATUS_UNREALIZABLE: 'unrealizable'}
+        status_to_str = {exit_status_realizable: 'realizable',
+                         exit_status_unrealizable: 'unrealizable'}
         out = 'wrong realizability status: should be {expected}, but the tool found it {res}'.format(
             expected=status_to_str[expected],
             res=status_to_str[rc])
@@ -73,10 +71,12 @@ if __name__ == "__main__":
                  find_files('./tests/buechi/', extension='aag', ignore_mark='notest') + \
                  find_files('./tests/syntcomp-format/', extension='aag', ignore_mark='notest') + \
                  find_files('./tests/1-streett/', extension='aag', ignore_mark='notest')
+    RUN_TOOL = run_tool
+    CHECK_RESULT = [check_answer, check_answer_with_mc][args.mc]
 
     logger = setup_logging()
     exit(run_tests(TEST_FILES,
-                   run_tool,
-                   [check_answer, check_answer_with_mc][args.mc],
+                   RUN_TOOL,
+                   CHECK_RESULT,
                    True,
                    logger))
