@@ -53,7 +53,7 @@ then run `. ./setup.sh`.
 
 
 ## Test
-To run tests without model checking the models synthesized:
+To run tests without model checking of the models synthesized:
 
     ./run_func_tests.py
 
@@ -61,6 +61,7 @@ To run it with model checking:
 
     ./run_func_tests.py --mc
 
+(from the tool root directory)
 
 ## Contact
 Gmail me: ayrat.khalimov
