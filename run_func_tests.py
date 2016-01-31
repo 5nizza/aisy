@@ -18,7 +18,7 @@ def is_realizable(test):
 
 
 def run_tool(test_file, result_file):
-    return execute_shell('./aisy.py  ' + test_file + ' --out ' + result_file)
+    return execute_shell('./aisy.py ' + test_file + ' --out ' + result_file)
 
 
 def check_answer(test_file:str, result_file, rc, out, err):
@@ -48,8 +48,8 @@ def check_answer_with_mc(test_file, result_file, rc, out, err):
 
     tmp_file_name = result_file + '.aag'   # because iimc doesn't understand non-aag extensions
     assert 0 == execute_shell('cat {result_file} >> {result_file_aag}'.format(result_file=result_file,
-                                                                              result_file_aag=tmp_file_name))\
-                [0]
+                                                                              result_file_aag=tmp_file_name),
+                              cmd_uses_shell_tricks=True)[0]
 
     rc, out, err = execute_shell(SPEC_FRAMEWORK_DIR + '/check_model.sh ' + tmp_file_name)
 

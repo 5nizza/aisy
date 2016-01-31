@@ -24,21 +24,27 @@ def find_files(directory:str, extension:str= '', ignore_mark=None):
     return matching_files
 
 
-def execute_shell(cmd, input=''):
+def execute_shell(cmd, input='', cmd_uses_shell_tricks=False):
     """
     Execute cmd, send input to stdin.
+    :param cmd_uses_shell_tricks: set True when need redirecting and pipe-lining
     :return: returncode, stdout, stderr.
     """
 
     proc_stdin = subprocess.PIPE if input != '' and input is not None else None
     proc_input = input if input != '' and input is not None else None
 
-    args = shlex.split(cmd)
+    if not cmd_uses_shell_tricks:   # TODO: detect automatically
+        args = shlex.split(cmd)
+    else:
+        args = cmd
 
     p = subprocess.Popen(args,
                          stdin=proc_stdin,
                          stdout=subprocess.PIPE,
-                         stderr=subprocess.PIPE)
+                         stderr=subprocess.PIPE,
+                         shell=cmd_uses_shell_tricks
+                         )
 
     out, err = p.communicate(proc_input)
 
