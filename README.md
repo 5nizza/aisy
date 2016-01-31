@@ -14,7 +14,7 @@ Described [here][spec-framework], and is derived from
     (tested with versions 2.0.11)
   - (probably) python2.7 headers
   - checked on Ubuntu 12.04 and 14.04
-  - testing script `run_tests.py` requires 
+  - testing script `run_func_tests.py` requires 
     [`spec-framework`][spec-framework] 
     and [IIMC][IIMC] if you want to model check the results
 
@@ -55,11 +55,11 @@ then run `. ./setup.sh`.
 ## Test
 To run tests without model checking the models synthesized:
 
-    ./run_tests.py
+    ./run_func_tests.py
 
 To run it with model checking:
 
-    ./run_tests.py --mc
+    ./run_func_tests.py --mc
 
 
 ## Contact
