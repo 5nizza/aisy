@@ -5,25 +5,21 @@
        |_||!_' Y 
        | ||._! | 
 
-Simply GR1 synthesizer from
-[AIGER](http://fmv.jku.at/aiger/) GR1 format.
+Simple GR1 synthesizer from
+[AIGER-like](http://fmv.jku.at/aiger/) GR1 format.
 The format is described [here](https://github.org/5nizza/spec-framework).
 
 Gmail me: ayrat.khalimov
 """
 
 import argparse
-import logging
-import sys
-
 import pycudd
-
-from aiger_swig.aiger_wrap import *
-from ansistrm import ColorizingStreamHandler
 import aiger_swig.aiger_wrap as aiglib
 
+from aiger_swig.aiger_wrap import *
+from ansistrm import setup_logging
 
-# don't change status numbers since they are used by the performance script
+
 EXIT_STATUS_REALIZABLE = 10
 EXIT_STATUS_UNREALIZABLE = 20
 
@@ -36,36 +32,6 @@ cudd = None
 
 #: :type: Logger
 logger = None
-
-
-def setup_logging(verbose_level, filename=None):
-    level = None
-    if verbose_level == -1:
-        level = logging.CRITICAL
-    if verbose_level is 0:
-        level = logging.INFO
-    elif verbose_level >= 1:
-        level = logging.DEBUG
-
-    formatter = logging.Formatter(fmt="%(asctime)-10s%(message)s",
-                                  datefmt="%H:%M:%S")
-
-    stdout_handler = ColorizingStreamHandler()
-    stdout_handler.setFormatter(formatter)
-    stdout_handler.stream = sys.stdout
-
-    if not filename:
-        filename = 'last.log'
-    file_handler = logging.FileHandler(filename=filename, mode='w')
-    file_handler.setFormatter(formatter)
-
-    root = logging.getLogger()
-    root.addHandler(stdout_handler)
-    root.addHandler(file_handler)
-
-    root.setLevel(level)
-
-    return logging.getLogger(__name__)
 
 
 def is_negated(l):

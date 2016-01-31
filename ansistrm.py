@@ -1,3 +1,38 @@
+############################################################################
+# I added this function for convenience (ayrat.khalimov)
+
+
+def setup_logging(verbose_level=0, filename=None):
+    level = None
+    if verbose_level == -1:
+        level = logging.CRITICAL
+    if verbose_level is 0:
+        level = logging.INFO
+    elif verbose_level >= 1:
+        level = logging.DEBUG
+
+    formatter = logging.Formatter(fmt="%(asctime)-10s%(message)s",
+                                  datefmt="%H:%M:%S")
+
+    stdout_handler = ColorizingStreamHandler()
+    stdout_handler.setFormatter(formatter)
+    stdout_handler.stream = sys.stdout
+
+    if not filename:
+        filename = 'last.log'
+    file_handler = logging.FileHandler(filename=filename, mode='w')
+    file_handler.setFormatter(formatter)
+
+    root = logging.getLogger()
+    root.addHandler(stdout_handler)
+    root.addHandler(file_handler)
+
+    root.setLevel(level)
+
+    return logging.getLogger(filename or __name__)
+
+############################################################################
+
 #
 # Copyright (C) 2010-2012 Vinay Sajip. All rights reserved. Licensed under the new BSD license.
 #
