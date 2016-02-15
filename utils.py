@@ -1,12 +1,13 @@
 import os
 import shlex
 import subprocess
-from tempfile import NamedTemporaryFile, mkstemp, mkdtemp
+from tempfile import mkstemp, mkdtemp
 
 
 def find_files(directory:str, extension:str= '', ignore_mark=None):
     """
-    Walk recursively :arg directory, ignoring dirs that contain :arg ignore_mark,
+    Walk recursively :arg directory,
+      ignoring dirs that contain file named :arg ignore_mark,
     and return all files matching :arg extension
     """
 
