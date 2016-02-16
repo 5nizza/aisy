@@ -6,7 +6,7 @@ aag 5 2 0 1 3
 8 2 4
 10 3 5
 i0 i
-i1 controllable
+i1 controllable_
 c
 G(!(i <-> c))
 special case -- no latches
