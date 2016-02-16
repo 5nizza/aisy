@@ -1,8 +1,8 @@
-import os
+import shutil
 from logging import Logger
-from os import rmdir, makedirs
+from os import makedirs
 
-from utils import get_tmp_file_name, get_tmp_dir_name, execute_shell
+from utils import get_tmp_dir_name
 
 
 def rc_out_err_to_str(rc, out, err):
@@ -68,6 +68,6 @@ def run_tests(test_files,
         logger.info('ALL TESTS PASSED')
 
     if not output_folder and not failed_tests:
-        assert 0 == execute_shell('rm -rf ' + output_dir)[0]  # TODO: how to remove dir and its content in python?
+        shutil.rmtree(output_dir)
 
     return not failed_tests
