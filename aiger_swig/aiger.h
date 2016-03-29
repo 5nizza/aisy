@@ -359,6 +359,6 @@ aiger_and *aiger_is_and (aiger *, unsigned lit);
  *
  */
 void
-aiger_redefine_input_as_and (aiger* public, unsigned input_lit, unsigned rhs0, unsigned rhs1);
+aiger_redefine_input_as_and (aiger*, unsigned input_lit, unsigned rhs0, unsigned rhs1);
 
 #endif
