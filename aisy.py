@@ -403,7 +403,7 @@ def extract_output_funcs(non_det_strategy_bdd):
         care_set = (must_be_true | must_be_false)
 
         # We use 'restrict' operation, but we could also do just:
-        # c_model = must_be_true -> care_set
+        # c_model = care_set -> must_be_true
         # ..but this is (probably) less efficient, since we cannot set c=1 if it is not in care_set, but we could.
         #
         # Restrict on the other side applies optimizations to find smaller bdd.
