@@ -402,17 +402,15 @@ def extract_output_funcs(non_det_strategy_bdd):
 
         care_set = (must_be_true | must_be_false)
 
-        # We use 'restrict' operation, but we could also do just:
-        # c_model = care_set -> must_be_true
-        # ..but this is (probably) less efficient, since we cannot set c=1 if it is not in care_set, but we could.
+        # We use 'restrict' operation, but we could also just do:
+        #     c_model = care_set -> must_be_true
+        # but this is (presumably) less efficient (in time? in size?).
+        # (intuitively, because we always set c_model to 1 if !care_set,
+        #  but we could set it to 0)
         #
-        # Restrict on the other side applies optimizations to find smaller bdd.
-        # It cannot be expressed using boolean logic operations since we would need to say:
-        # must_be_true = ite(care_set, must_be_true, "don't care")
-        # and "don't care" cannot be expressed in boolean logic.
+        # The result of restrict operation satisfies:
+        #     on c_care_set: c_must_be_true <-> must_be_true.Restrict(c_care_set)
 
-        # Restrict operation:
-        #   on care_set: must_be_true.restrict(care_set) <-> must_be_true
         c_model = must_be_true.Restrict(care_set)
 
         output_models[c] = c_model
@@ -618,29 +616,30 @@ def init_cudd():
     global cudd
     cudd = pycudd.DdManager()
     cudd.SetDefault()
-    # CUDD_REORDER_SAME,
-    # CUDD_REORDER_NONE,
-    # CUDD_REORDER_RANDOM,
-    # CUDD_REORDER_RANDOM_PIVOT,
-    # CUDD_REORDER_SIFT,
-    # CUDD_REORDER_SIFT_CONVERGE,
-    # CUDD_REORDER_SYMM_SIFT,
-    # CUDD_REORDER_SYMM_SIFT_CONV,
-    # CUDD_REORDER_WINDOW2,
-    # CUDD_REORDER_WINDOW3,
-    # CUDD_REORDER_WINDOW4,
-    # CUDD_REORDER_WINDOW2_CONV,
-    # CUDD_REORDER_WINDOW3_CONV,
-    # CUDD_REORDER_WINDOW4_CONV,
-    # CUDD_REORDER_GROUP_SIFT,
-    # CUDD_REORDER_GROUP_SIFT_CONV,
-    # CUDD_REORDER_ANNEALING,
-    # CUDD_REORDER_GENETIC,
-    # CUDD_REORDER_LINEAR,
-    # CUDD_REORDER_LINEAR_CONVERGE,
-    # CUDD_REORDER_LAZY_SIFT,
-    # CUDD_REORDER_EXACT
+    #0  CUDD_REORDER_SAME,
+    #1  CUDD_REORDER_NONE,
+    #2  CUDD_REORDER_RANDOM,
+    #3  CUDD_REORDER_RANDOM_PIVOT,
+    #4  CUDD_REORDER_SIFT,
+    #5  CUDD_REORDER_SIFT_CONVERGE,
+    #6  CUDD_REORDER_SYMM_SIFT,
+    #7  CUDD_REORDER_SYMM_SIFT_CONV,
+    #8  CUDD_REORDER_WINDOW2,
+    #9  CUDD_REORDER_WINDOW3,
+    #10 CUDD_REORDER_WINDOW4,
+    #11 CUDD_REORDER_WINDOW2_CONV,
+    #12 CUDD_REORDER_WINDOW3_CONV,
+    #13 CUDD_REORDER_WINDOW4_CONV,
+    #14 CUDD_REORDER_GROUP_SIFT,
+    #15 CUDD_REORDER_GROUP_SIFT_CONV,
+    #16 CUDD_REORDER_ANNEALING,
+    #17 CUDD_REORDER_GENETIC,
+    #18 CUDD_REORDER_LINEAR,
+    #19 CUDD_REORDER_LINEAR_CONVERGE,
+    #20 CUDD_REORDER_LAZY_SIFT,
+    #21 CUDD_REORDER_EXACT
     cudd.AutodynEnable(4)
+    # NOTE: not all reordering operations 'work' (i got errors with LINEAR)
     # cudd.AutodynDisable()
     # cudd.EnableReorderingReporting()
 
