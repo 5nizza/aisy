@@ -96,16 +96,11 @@ def compose_indexing_translation():
 
 def get_substitution():
 
-    #print aiger_by_cudd
-    #print cudd_by_aiger
+    max_var = spec.num_inputs + spec.num_latches
 
-    variable = spec.num_inputs + spec.num_latches
+    sub_array = pycudd.DdArray(max_var)
+    for i in range(0, max_var):
 
-    sub_array = pycudd.DdArray(variable)
-    for i in range(0, variable):
-
-        # multiply by two cause of the aiger indexing
-        #print "aiger_by_cudd[",i,"]: ", aiger_by_cudd[i]
         if aiger_is_latch(spec, aiger_by_cudd[i]):
             ret_val = transition_function[aiger_by_cudd[i]]
             sub_array.Push(ret_val)
