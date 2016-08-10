@@ -200,29 +200,6 @@ def make_bdd_eq(value1, value2):
     return (value1 & value2) | (~value1 & ~value2)
 
 
-def compose_transition_bdd():
-    """ :return: BDD representing transition function of spec: ``T(x,i,c,x')``
-    """
-
-    logger.info('compose_transition_bdd, nof_latches={0}...'.format(len(list(iterate_latches()))))
-
-    #: :type: DdNode
-    transition = cudd.One()
-    for l in iterate_latches():
-        #: :type: aiger_symbol
-        l = l
-
-        next_value_bdd = get_bdd_for_value(int(l.next))
-
-        next_value_variable = get_primed_variable_as_bdd(l.lit)
-
-        latch_transition = make_bdd_eq(next_value_variable, next_value_bdd)
-
-        transition &= latch_transition
-
-    return transition
-
-
 def get_cube(variables):
     if not variables:
         return cudd.One()
@@ -295,7 +272,7 @@ def unprime_latches_in_bdd(bdd):
     return unprimed_bdd
 
 
-def sys_predecessor(dst_bdd, trans_bdd, env_bdd, sys_bdd):
+def sys_predecessor(dst_bdd, env_bdd, sys_bdd):
     """
     Calculate controllable predecessor of dst
 
@@ -330,8 +307,7 @@ def sys_predecessor(dst_bdd, trans_bdd, env_bdd, sys_bdd):
     return A_i_E_o_implication
 
 
-def calc_win_region(trans_bdd,
-                    env_bdd, sys_bdd,
+def calc_win_region(env_bdd, sys_bdd,
                     fair_bdd, just_bdd):
     """
     The mu-calculus formula for 1-Streett is
@@ -362,7 +338,7 @@ def calc_win_region(trans_bdd,
 
     logger.info('calc_win_region..')
 
-    Cpre = lambda dst: sys_predecessor(dst, trans_bdd, env_bdd, sys_bdd)
+    Cpre = lambda dst: sys_predecessor(dst, env_bdd, sys_bdd)
 
     Z = cudd.One()
     prevZ = None
@@ -390,7 +366,6 @@ def calc_win_region(trans_bdd,
 
 
 def get_nondet_strategy(Z_bdd, Ys,
-                        trans_bdd,
                         env_bdd, sys_bdd,
                         fair_bdd, just_bdd):
 
@@ -594,17 +569,13 @@ def synthesize(realiz_check):
 
     compose_transition_vector()
 
-    #: :type: DdNode
-    trans_bdd = compose_transition_bdd()
-
     env_bdd, err_bdd, f_bdd, j_bdd = get_inv_err_f_j_bdds()
 
     # ensure that depends on latches only: (\exists i1..in: a&b&c&i1==False) is not True  # TODO: lift to justice(t,i,o)
     assert_liveness_is_Moore(j_bdd, 'J')
     assert_liveness_is_Moore(f_bdd, 'F')
 
-    Z, Ys = calc_win_region(trans_bdd,
-                            env_bdd, ~err_bdd,
+    Z, Ys = calc_win_region(env_bdd, ~err_bdd,
                             f_bdd, j_bdd)
 
 
@@ -615,7 +586,6 @@ def synthesize(realiz_check):
         return True, None
 
     non_det_strategy = get_nondet_strategy(Z, Ys,
-                                           trans_bdd,
                                            env_bdd, ~err_bdd,
                                            f_bdd, j_bdd)
 
