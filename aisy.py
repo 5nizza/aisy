@@ -36,6 +36,13 @@ logger = None
 # to cache equal Sub-BDDs
 cache_dict = dict()
 
+# for transistion function optimization
+transition_function = dict()
+
+# to translate the indexing
+aiger_by_cudd = dict()
+cudd_by_aiger = dict()
+
 
 def is_negated(l):
     return (l & 1) == 1
@@ -67,6 +74,77 @@ def parse_into_spec(aiger_file_name):
     assert spec.num_justice <= 1, 'not supported'
     assert spec.num_fairness <= 1, 'not supported'
 
+def compose_indexing_translation():
+
+    for i in range(0, spec.num_inputs):
+        aiger_strip_lit = get_aiger_symbol(spec.inputs, i).lit
+
+        cudd_by_aiger[aiger_strip_lit] = i
+        aiger_by_cudd[i] = aiger_strip_lit
+
+    for i in range(0, spec.num_latches):
+        aiger_strip_lit = get_aiger_symbol(spec.latches, i).lit
+
+        cudd_idx = i + spec.num_inputs
+
+        cudd_by_aiger[aiger_strip_lit] = cudd_idx
+        aiger_by_cudd[cudd_idx] = aiger_strip_lit
+
+    for i in range(spec.num_inputs + spec.num_latches, 2*(spec.num_inputs + spec.num_latches) +1):
+        aiger_by_cudd[i] = 0
+
+
+def get_substitution():
+
+    #print aiger_by_cudd
+    #print cudd_by_aiger
+
+    variable = spec.num_inputs + spec.num_latches
+
+    sub_array = pycudd.DdArray(variable)
+    for i in range(0, variable):
+
+        # multiply by two cause of the aiger indexing
+        #print "aiger_by_cudd[",i,"]: ", aiger_by_cudd[i]
+        if aiger_is_latch(spec, aiger_by_cudd[i]):
+            ret_val = transition_function[aiger_by_cudd[i]]
+            sub_array.Push(ret_val)
+        else:
+            sub_array.Push(cudd.ReadVars(i))
+
+    return sub_array
+
+
+def compose_transition_vector():
+    logger.info('compose_transition_vector...')
+
+    for l in iterate_latches():
+        transition_function[l.lit] = get_bdd_for_sign_lit(l.next)
+
+    return transition_function
+
+
+def get_bdd_for_sign_lit(lit):
+
+    stripped_lit = strip_lit(lit)
+    input_, latch_, and_ = get_lit_type(stripped_lit)
+    res = None
+
+    if stripped_lit == 0:
+        res = cudd.Zero()
+
+    elif input_ or latch_:
+        res = cudd.IthVar(cudd_by_aiger[stripped_lit])
+
+    else: # aiger_and
+        arg1 = get_bdd_for_sign_lit(int(and_.rhs0))
+        arg2 = get_bdd_for_sign_lit(int(and_.rhs1))
+        res = arg1 & arg2
+
+    if is_negated(lit):
+        res = ~res
+
+    return res
 
 def get_lit_type(stripped_lit):
     input_ = aiger_is_input(spec, stripped_lit)
@@ -93,7 +171,7 @@ def get_bdd_for_value(lit):  # lit is variable index with sign
         input_, latch_, and_ = get_lit_type(stripped_lit)
 
         if input_ or latch_:
-            res = cudd.IthVar(stripped_lit)    # use internal mapping of cudd
+            res = cudd.IthVar(cudd_by_aiger[stripped_lit])
         elif and_:
             #: :type: aiger_and
             arg1 = get_bdd_for_value(int(and_.rhs0))
@@ -161,7 +239,7 @@ def _get_bdd_vars(filter_func):
     for i in range(spec.num_inputs):
         input_aiger_symbol = get_aiger_symbol(spec.inputs, i)
         if filter_func(input_aiger_symbol.name.strip()):
-            out_var_bdd = get_bdd_for_value(input_aiger_symbol.lit)
+            out_var_bdd = get_bdd_for_sign_lit(input_aiger_symbol.lit)
             var_bdds.append(out_var_bdd)
 
     return var_bdds
@@ -226,12 +304,17 @@ def sys_predecessor(dst_bdd, trans_bdd, env_bdd, sys_bdd):
     :return: BDD representation of the predecessor states
     """
 
-    next_dst = prime_latches_in_bdd(dst_bdd)
-    tau_and_dst = trans_bdd & next_dst
+    dst_prime = dst_bdd.VectorCompose(get_substitution())
+
+    # next_dst = prime_latches_in_bdd(dst_bdd)
+    # tau_and_dst = trans_bdd & next_dst
 
     # cudd requires to create a cube first
-    next_state_vars_cube = prime_latches_in_bdd(get_cube(get_all_latches_as_bdds()))
-    E_tn_tau_and_dst = tau_and_dst.ExistAbstract(next_state_vars_cube)  # ∃t'  tau(t,i,t',o) & dst(t')
+    #next_state_vars_cube = prime_latches_in_bdd(get_cube(get_all_latches_as_bdds()))
+    #E_tn_tau_and_dst = tau_and_dst.ExistAbstract(next_state_vars_cube)  # ∃t'  tau(t,i,t',o) & dst(t')
+
+    # use VectorCompose instead of prime variables
+    E_tn_tau_and_dst = dst_prime
 
     sys_and_E_tn_tau_and_dst = sys_bdd & E_tn_tau_and_dst
     env_impl_sys_and_tau = ~env_bdd | sys_and_E_tn_tau_and_dst
@@ -333,24 +416,25 @@ def get_nondet_strategy(Z_bdd, Ys,
     """
 
     logger.info('get_nondet_strategy..')
+
     # TODO: optimize for special cases: safety, buechi (hangs on the huffman example)
 
     assert_increasing(Ys)
 
-    onion = lambda i: Ys[i] & ~Ys[i-1] if i>0 else Ys[i]
+    onion = lambda i: Ys[i] & ~Ys[i-1] if (i > 0) else Ys[i]
 
-    rho1 = just_bdd & sys_bdd & prime_latches_in_bdd(Z_bdd)
+    rho1 =  just_bdd & sys_bdd & Z_bdd.VectorCompose(get_substitution())
 
     rho2 = cudd.Zero()
     for r in range(2, len(Ys)):
-        rho2 |= onion(r) & sys_bdd & prime_latches_in_bdd(Ys[r-1])
+        rho2 |= onion(r) & sys_bdd & Ys[r-1].VectorCompose(get_substitution())
 
     rho3 = cudd.Zero()
     for r in range(0, len(Ys)):
-        rho3 |= onion(r) & ~fair_bdd & sys_bdd & prime_latches_in_bdd(Ys[r])
+        rho3 |= onion(r) & ~fair_bdd & sys_bdd & Ys[r].VectorCompose(get_substitution())
 
-    strategy = ~env_bdd | ~Z_bdd | (trans_bdd & (rho1 | rho2 | rho3)).ExistAbstract(
-        prime_latches_in_bdd(get_cube(get_all_latches_as_bdds())))
+
+    strategy = ~env_bdd | ~Z_bdd | (rho1 | rho2 | rho3)
 
     return strategy
 
@@ -362,8 +446,8 @@ def compose_init_state_bdd():
 
     init_state_bdd = cudd.One()
     for l in iterate_latches():
-        l_curr_value_bdd = get_bdd_for_value(l.lit)
-        init_state_bdd &= make_bdd_eq(l_curr_value_bdd, cudd.Zero())
+        l_curr_value_bdd = get_bdd_for_sign_lit(l.lit)
+        init_state_bdd &= ~l_curr_value_bdd
 
     return init_state_bdd
 
@@ -387,7 +471,7 @@ def extract_output_funcs(non_det_strategy_bdd):
     all_vars.extend(get_all_latches_as_bdds())
 
     for c in get_controllable_vars_bdds():
-        logger.info('getting output function for ' + aiger_is_input(spec, strip_lit(c.NodeReadIndex())).name)
+        logger.info('getting output function for ' + aiger_is_input(spec, aiger_by_cudd[strip_lit(c.NodeReadIndex())]).name)
 
         others = set(set(controls).difference({c}))
         if others:
@@ -435,9 +519,9 @@ def extract_output_funcs(non_det_strategy_bdd):
         #   on care_set: must_be_true.restrict(care_set) <-> must_be_true
         c_model = must_be_true.Restrict(care_set)
 
-        output_models[c] = c_model
+        output_models[c.NodeReadIndex()] = c_model
 
-        non_det_strategy_bdd = non_det_strategy_bdd & make_bdd_eq(c, c_model)
+        non_det_strategy_bdd = non_det_strategy_bdd.Compose(c_model, c.NodeReadIndex())
 
     return output_models
 
@@ -502,12 +586,16 @@ def synthesize(realiz_check):
     """
     logger.info('synthesize..')
 
+    # build indexig translation: cudd <-> aiger
+    compose_indexing_translation()
+
     #: :type: DdNode
     init_bdd = compose_init_state_bdd()
-    # init_state_bdd.PrintMinterm()
+
+    compose_transition_vector()
+
     #: :type: DdNode
     trans_bdd = compose_transition_bdd()
-    # transition_bdd.PrintMinterm()
 
     env_bdd, err_bdd, f_bdd, j_bdd = get_inv_err_f_j_bdds()
 
@@ -518,6 +606,7 @@ def synthesize(realiz_check):
     Z, Ys = calc_win_region(trans_bdd,
                             env_bdd, ~err_bdd,
                             f_bdd, j_bdd)
+
 
     if not (init_bdd <= Z):
         return False, None
@@ -594,7 +683,7 @@ def walk(a_bdd):
 
     # get an index of variable,
     # all variables used in BDDs are also present in AIGER
-    a_lit = a_bdd.NodeReadIndex()
+    a_lit = aiger_by_cudd[a_bdd.NodeReadIndex()]
 
     #: :type: DdNode
     t_bdd = a_bdd.T()
@@ -634,7 +723,7 @@ def model_to_aiger(c_bdd, func_bdd, introduce_output):
     """
     #: :type: DdNode
     c_bdd = c_bdd
-    c_lit = c_bdd.NodeReadIndex()
+    c_lit = aiger_by_cudd[c_bdd.NodeReadIndex()]
 
     func_as_aiger_lit = walk(func_bdd)
 
@@ -691,7 +780,7 @@ def main(aiger_file_name, out_file_name, output_full_circuit, realiz_check):
 
     if realizable:
         for (c_bdd, func_bdd) in func_by_var.items():
-            model_to_aiger(c_bdd, func_bdd, output_full_circuit)
+            model_to_aiger(cudd.ReadVars(c_bdd), func_bdd, output_full_circuit)
 
         # some model checkers do not like unordered variable names (when e.g. latch is > add)
         # aiger_reencode(spec)
