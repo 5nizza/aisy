@@ -2,8 +2,8 @@
 # coding=utf-8
 
 """     _ + _ . .
-       |_||!_' Y 
-       | ||._! | 
+       |_||!_' Y
+       | ||._! |
 
 Simple GR1 synthesizer from
 [AIGER-like](http://fmv.jku.at/aiger/) GR1 format.
@@ -266,7 +266,7 @@ def calc_win_region(trans_bdd,
                       or loops in !fair forever except possibly for <r moments where it visits a fair state.
 
     The external gfp.Z is decreasing, and is somewhat similar to Buechi win set computation:
-    it gradually removes states from which we cannot visit just once, or twice, thrice... 
+    it gradually removes states from which we cannot visit just once, or twice, thrice...
     and it accounts for the possibility to end in !fair lassos.
 
     See also: [notes/1-streett-pair-mu-calculus.jpg](gfp.Y calculation)
@@ -378,6 +378,11 @@ def extract_output_funcs(non_det_strategy_bdd):
 
     output_models = dict()
     controls = get_controllable_vars_bdds()
+
+    # build list with all variables
+    all_vars = get_uncontrollable_vars_bdds()
+    all_vars.extend(get_all_latches_as_bdds())
+
     for c in get_controllable_vars_bdds():
         logger.info('getting output function for ' + aiger_is_input(spec, strip_lit(c.NodeReadIndex())).name)
 
@@ -399,6 +404,18 @@ def extract_output_funcs(non_det_strategy_bdd):
         #: :type: DdNode
         must_be_true = (~can_be_false) & can_be_true
         must_be_false = (~can_be_true) & can_be_false
+
+        # implementation of variable minimization
+        for v in all_vars:
+
+            must_be_true_prime = must_be_true.ExistAbstract(v)
+            must_be_false_prime = must_be_false.ExistAbstract(v)
+
+            # (must_be_false_prime & must_be_true_prime) should be UNSAT
+            if(must_be_false_prime & must_be_true_prime) == cudd.Zero():
+                must_be_true = must_be_true_prime
+                must_be_false = must_be_false_prime
+
 
         care_set = (must_be_true | must_be_false)
 
