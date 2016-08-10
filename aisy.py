@@ -33,6 +33,9 @@ cudd = None
 #: :type: Logger
 logger = None
 
+# to cache equal Sub-BDDs
+cache_dict = dict()
+
 
 def is_negated(l):
     return (l & 1) == 1
@@ -577,6 +580,12 @@ def walk(a_bdd):
     :warning: variables in cudd nodes may be complemented, check with: ``node.IsComplement()``
     """
 
+    # caching
+    cached_lit = cache_dict.get(a_bdd.Regular(), None)
+    if(cached_lit != None):
+        return ( negated(cached_lit) if a_bdd.IsComplement() else cached_lit)
+    # end caching
+
     #: :type: DdNode
     a_bdd = a_bdd
     if a_bdd.IsConstant():
@@ -610,6 +619,10 @@ def walk(a_bdd):
     ite_lit = get_optimized_and_lit(n_a_t_lit, n_na_e_lit)
 
     res = negated(ite_lit)
+
+    # save all bdd's to caching dictionary
+    cache_dict[a_bdd.Regular()] = res
+
     if a_bdd.IsComplement():
         res = negated(res)
 
