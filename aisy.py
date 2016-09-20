@@ -13,7 +13,12 @@ Gmail me: ayrat.khalimov
 """
 
 import argparse
+from logging import Logger
+
 import pycudd
+from pycudd import DdManager
+from pycudd import DdNode
+
 import aiger_swig.aiger_wrap as aiglib
 
 from aiger_swig.aiger_wrap import *
@@ -24,22 +29,19 @@ EXIT_STATUS_REALIZABLE = 10
 EXIT_STATUS_UNREALIZABLE = 20
 
 
-#: :type: aiger
-spec = None
+spec = None    # type: aiger
 
-#: :type: DdManager
-cudd = None
+cudd = None    # type: DdManager
 
-#: :type: Logger
-logger = None
+logger = None  # type: Logger
 
-# to cache equal Sub-BDDs
+# To cache equal Sub-BDDs
 cache_dict = dict()
 
-# for transistion function optimization
+# Transition function of the circuit:
 transition_function = dict()
 
-# to translate the indexing
+# To translate the indexing
 aiger_by_cudd = dict()
 cudd_by_aiger = dict()
 
@@ -74,8 +76,8 @@ def parse_into_spec(aiger_file_name):
     assert spec.num_justice <= 1, 'not supported'
     assert spec.num_fairness <= 1, 'not supported'
 
-def compose_indexing_translation():
 
+def compose_indexing_translation():
     for i in range(0, spec.num_inputs):
         aiger_strip_lit = get_aiger_symbol(spec.inputs, i).lit
 
@@ -95,7 +97,6 @@ def compose_indexing_translation():
 
 
 def get_substitution():
-
     max_var = spec.num_inputs + spec.num_latches
 
     sub_array = pycudd.DdArray(max_var)
@@ -120,10 +121,8 @@ def compose_transition_vector():
 
 
 def get_bdd_for_sign_lit(lit):
-
     stripped_lit = strip_lit(lit)
     input_, latch_, and_ = get_lit_type(stripped_lit)
-    res = None
 
     if stripped_lit == 0:
         res = cudd.Zero()
@@ -131,7 +130,7 @@ def get_bdd_for_sign_lit(lit):
     elif input_ or latch_:
         res = cudd.IthVar(cudd_by_aiger[stripped_lit])
 
-    else: # aiger_and
+    else:  # aiger_and
         arg1 = get_bdd_for_sign_lit(int(and_.rhs0))
         arg2 = get_bdd_for_sign_lit(int(and_.rhs1))
         res = arg1 & arg2
@@ -141,6 +140,7 @@ def get_bdd_for_sign_lit(lit):
 
     return res
 
+
 def get_lit_type(stripped_lit):
     input_ = aiger_is_input(spec, stripped_lit)
     latch_ = aiger_is_latch(spec, stripped_lit)
@@ -149,6 +149,7 @@ def get_lit_type(stripped_lit):
     return input_, latch_, and_
 
 
+# FIXME: what is the diff with `get_bdd_for_sign_lit`?
 def get_bdd_for_value(lit):  # lit is variable index with sign
     """
     We use the following mapping of AIGER indices to CUDD indices:
@@ -167,8 +168,7 @@ def get_bdd_for_value(lit):  # lit is variable index with sign
 
         if input_ or latch_:
             res = cudd.IthVar(cudd_by_aiger[stripped_lit])
-        elif and_:
-            #: :type: aiger_and
+        elif and_:  # of type 'aiger_and'
             arg1 = get_bdd_for_value(int(and_.rhs0))
             arg2 = get_bdd_for_value(int(and_.rhs1))
             res = arg1 & arg2
@@ -189,10 +189,6 @@ def get_unprimed_variable_as_bdd(lit):
 def get_primed_variable_as_bdd(lit):
     stripped_lit = strip_lit(lit)
     return cudd.IthVar(stripped_lit + 1)  # we know that odd vars cannot be used as names of latches/inputs
-
-
-def make_bdd_eq(value1, value2):
-    return (value1 & value2) | (~value1 & ~value2)
 
 
 def get_cube(variables):
@@ -230,43 +226,6 @@ def get_all_latches_as_bdds():
     return bdds
 
 
-def _prime_unprime_latches_in_bdd(bdd, should_prime):
-    if bdd == cudd.Zero() or bdd == cudd.One():
-        return bdd
-
-    latch_bdds = get_all_latches_as_bdds()
-    num_latches = len(latch_bdds)
-    #: :type: DdArray
-    primed_var_array = pycudd.DdArray(num_latches)
-    curr_var_array = pycudd.DdArray(num_latches)
-
-    for l_bdd in latch_bdds:
-        #: :type: DdNode
-        l_bdd = l_bdd
-        curr_var_array.Push(l_bdd)
-
-        lit = l_bdd.NodeReadIndex()
-        new_l_bdd = get_primed_variable_as_bdd(lit)
-        primed_var_array.Push(new_l_bdd)
-
-    if should_prime:
-        replaced_states_bdd = bdd.SwapVariables(curr_var_array, primed_var_array, num_latches)
-    else:
-        replaced_states_bdd = bdd.SwapVariables(primed_var_array, curr_var_array, num_latches)
-
-    return replaced_states_bdd
-
-
-def prime_latches_in_bdd(states_bdd):
-    primed_states_bdd = _prime_unprime_latches_in_bdd(states_bdd, True)
-    return primed_states_bdd
-
-
-def unprime_latches_in_bdd(bdd):
-    unprimed_bdd = _prime_unprime_latches_in_bdd(bdd, False)
-    return unprimed_bdd
-
-
 def sys_predecessor(dst_bdd, env_bdd, sys_bdd):
     """
     Calculate controllable predecessor of dst
@@ -276,16 +235,8 @@ def sys_predecessor(dst_bdd, env_bdd, sys_bdd):
     :return: BDD representation of the predecessor states
     """
 
+    # Use VectorCompose instead of prime variables
     dst_prime = dst_bdd.VectorCompose(get_substitution())
-
-    # next_dst = prime_latches_in_bdd(dst_bdd)
-    # tau_and_dst = trans_bdd & next_dst
-
-    # cudd requires to create a cube first
-    #next_state_vars_cube = prime_latches_in_bdd(get_cube(get_all_latches_as_bdds()))
-    #E_tn_tau_and_dst = tau_and_dst.ExistAbstract(next_state_vars_cube)  # ∃t'  tau(t,i,t',o) & dst(t')
-
-    # use VectorCompose instead of prime variables
     E_tn_tau_and_dst = dst_prime
 
     sys_and_E_tn_tau_and_dst = sys_bdd & E_tn_tau_and_dst
@@ -393,7 +344,7 @@ def get_nondet_strategy(Z_bdd, Ys,
 
     onion = lambda i: Ys[i] & ~Ys[i-1] if (i > 0) else Ys[i]
 
-    rho1 =  just_bdd & sys_bdd & Z_bdd.VectorCompose(get_substitution())
+    rho1 = just_bdd & sys_bdd & Z_bdd.VectorCompose(get_substitution())
 
     rho2 = cudd.Zero()
     for r in range(2, len(Ys)):
@@ -402,7 +353,6 @@ def get_nondet_strategy(Z_bdd, Ys,
     rho3 = cudd.Zero()
     for r in range(0, len(Ys)):
         rho3 |= onion(r) & ~fair_bdd & sys_bdd & Ys[r].VectorCompose(get_substitution())
-
 
     strategy = ~env_bdd | ~Z_bdd | (rho1 | rho2 | rho3)
 
@@ -446,8 +396,7 @@ def extract_output_funcs(non_det_strategy_bdd):
         others = set(set(controls).difference({c}))
         if others:
             others_cube = get_cube(others)
-            #: :type: DdNode
-            c_arena = non_det_strategy_bdd.ExistAbstract(others_cube)
+            c_arena = non_det_strategy_bdd.ExistAbstract(others_cube)  # type: DdNode
         else:
             c_arena = non_det_strategy_bdd
 
@@ -458,21 +407,18 @@ def extract_output_funcs(non_det_strategy_bdd):
 
         # We need to intersect with can_be_true to narrow the search.
         # Negation can cause including states from !W
-        #: :type: DdNode
-        must_be_true = (~can_be_false) & can_be_true
-        must_be_false = (~can_be_true) & can_be_false
+        must_be_true = (~can_be_false) & can_be_true   # type: DdNode
+        must_be_false = (~can_be_true) & can_be_false  # type: DdNode
 
-        # implementation of variable minimization
+        # Optimization 'variable elimination':
         for v in all_vars:
-
             must_be_true_prime = must_be_true.ExistAbstract(v)
             must_be_false_prime = must_be_false.ExistAbstract(v)
 
             # (must_be_false_prime & must_be_true_prime) should be UNSAT
-            if(must_be_false_prime & must_be_true_prime) == cudd.Zero():
+            if (must_be_false_prime & must_be_true_prime) == cudd.Zero():
                 must_be_true = must_be_true_prime
                 must_be_false = must_be_false_prime
-
 
         care_set = (must_be_true | must_be_false)
 
@@ -554,11 +500,10 @@ def synthesize(realiz_check):
     """
     logger.info('synthesize..')
 
-    # build indexig translation: cudd <-> aiger
+    # build indexing translation: cudd <-> aiger
     compose_indexing_translation()
 
-    #: :type: DdNode
-    init_bdd = compose_init_state_bdd()
+    init_bdd = compose_init_state_bdd()  # type: DdNode
 
     compose_transition_vector()
 
@@ -570,7 +515,6 @@ def synthesize(realiz_check):
 
     Z, Ys = calc_win_region(env_bdd, ~err_bdd,
                             f_bdd, j_bdd)
-
 
     if not (init_bdd <= Z):
         return False, None
@@ -617,11 +561,6 @@ def get_optimized_and_lit(a_lit, b_lit):
     assert 0, 'impossible'
 
 
-def get_all_vars(bdd):
-    #: :type: DdNode
-    print(bdd.BddToCubeArray())
-
-
 def walk(a_bdd):
     """
     Walk given BDD node (recursively).
@@ -634,8 +573,9 @@ def walk(a_bdd):
 
     # caching
     cached_lit = cache_dict.get(a_bdd.Regular(), None)
-    if(cached_lit != None):
-        return ( negated(cached_lit) if a_bdd.IsComplement() else cached_lit)
+    if cached_lit is not None:
+        return negated(cached_lit) if a_bdd.IsComplement()\
+               else cached_lit
     # end caching
 
     #: :type: DdNode
@@ -648,10 +588,8 @@ def walk(a_bdd):
     # all variables used in BDDs are also present in AIGER
     a_lit = aiger_by_cudd[a_bdd.NodeReadIndex()]
 
-    #: :type: DdNode
-    t_bdd = a_bdd.T()
-    #: :type: DdNode
-    e_bdd = a_bdd.E()
+    t_bdd = a_bdd.T()  # type: DdNode
+    e_bdd = a_bdd.E()  # type: DdNode
 
     t_lit = walk(t_bdd)
     e_lit = walk(e_bdd)
@@ -672,7 +610,7 @@ def walk(a_bdd):
 
     res = negated(ite_lit)
 
-    # save all bdd's to caching dictionary
+    # caching
     cache_dict[a_bdd.Regular()] = res
 
     if a_bdd.IsComplement():
@@ -681,11 +619,11 @@ def walk(a_bdd):
     return res
 
 
-def model_to_aiger(c_bdd, func_bdd, introduce_output):
-    """ Update aiger spec with a definition of ``c_bdd``
-    """
-    #: :type: DdNode
-    c_bdd = c_bdd
+def model_to_aiger(c_bdd,     # type: DdNode
+                   func_bdd,  # type: DdNode
+                   introduce_output):
+    """ Update aiger spec with a definition of `c_bdd` """
+
     c_lit = aiger_by_cudd[c_bdd.NodeReadIndex()]
 
     func_as_aiger_lit = walk(func_bdd)
@@ -700,28 +638,28 @@ def init_cudd():
     global cudd
     cudd = pycudd.DdManager()
     cudd.SetDefault()
-    #0  CUDD_REORDER_SAME,
-    #1  CUDD_REORDER_NONE,
-    #2  CUDD_REORDER_RANDOM,
-    #3  CUDD_REORDER_RANDOM_PIVOT,
-    #4  CUDD_REORDER_SIFT,
-    #5  CUDD_REORDER_SIFT_CONVERGE,
-    #6  CUDD_REORDER_SYMM_SIFT,
-    #7  CUDD_REORDER_SYMM_SIFT_CONV,
-    #8  CUDD_REORDER_WINDOW2,
-    #9  CUDD_REORDER_WINDOW3,
-    #10 CUDD_REORDER_WINDOW4,
-    #11 CUDD_REORDER_WINDOW2_CONV,
-    #12 CUDD_REORDER_WINDOW3_CONV,
-    #13 CUDD_REORDER_WINDOW4_CONV,
-    #14 CUDD_REORDER_GROUP_SIFT,
-    #15 CUDD_REORDER_GROUP_SIFT_CONV,
-    #16 CUDD_REORDER_ANNEALING,
-    #17 CUDD_REORDER_GENETIC,
-    #18 CUDD_REORDER_LINEAR,
-    #19 CUDD_REORDER_LINEAR_CONVERGE,
-    #20 CUDD_REORDER_LAZY_SIFT,
-    #21 CUDD_REORDER_EXACT
+    # 0  CUDD_REORDER_SAME,
+    # 1  CUDD_REORDER_NONE,
+    # 2  CUDD_REORDER_RANDOM,
+    # 3  CUDD_REORDER_RANDOM_PIVOT,
+    # 4  CUDD_REORDER_SIFT,
+    # 5  CUDD_REORDER_SIFT_CONVERGE,
+    # 6  CUDD_REORDER_SYMM_SIFT,
+    # 7  CUDD_REORDER_SYMM_SIFT_CONV,
+    # 8  CUDD_REORDER_WINDOW2,
+    # 9  CUDD_REORDER_WINDOW3,
+    # 10 CUDD_REORDER_WINDOW4,
+    # 11 CUDD_REORDER_WINDOW2_CONV,
+    # 12 CUDD_REORDER_WINDOW3_CONV,
+    # 13 CUDD_REORDER_WINDOW4_CONV,
+    # 14 CUDD_REORDER_GROUP_SIFT,
+    # 15 CUDD_REORDER_GROUP_SIFT_CONV,
+    # 16 CUDD_REORDER_ANNEALING,
+    # 17 CUDD_REORDER_GENETIC,
+    # 18 CUDD_REORDER_LINEAR,
+    # 19 CUDD_REORDER_LINEAR_CONVERGE,
+    # 20 CUDD_REORDER_LAZY_SIFT,
+    # 21 CUDD_REORDER_EXACT
     cudd.AutodynEnable(4)
     # NOTE: not all reordering operations 'work' (i got errors with LINEAR)
     # cudd.AutodynDisable()
