@@ -13,7 +13,7 @@ Described [here][spec-framework], and is derived from
   - swig library: http://www.swig.org/
     (tested with versions 2.0.11)
   - (probably) python2.7 headers
-  - checked on Ubuntu 12.04 and 14.04
+  - checked on Ubuntu 14.04 and 16.04
   - testing script `run_func_tests.py` requires 
     [`spec-framework`][spec-framework] 
     and [IIMC][IIMC] if you want to model check the results
@@ -69,7 +69,10 @@ Gmail me: ayrat.khalimov
 
 ## Authors
 Ayrat Khalimov.
-Many thanks to Robert Koenighofer for fruitful discussions.
+Many thanks
+to Kurt Nistelberger for implementation of optimizations "vector compose", "variable elimination", and "caching of ANDs";
+to Robert Koenighofer for fruitful discussions.
+
 
 
 [IIMC]: http://ecee.colorado.edu/wpmu/iimc/
