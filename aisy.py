@@ -384,16 +384,17 @@ def extract_output_funcs(non_det_strategy_bdd):
     logger.info('extract_output_funcs..')
 
     output_models = dict()
-    controls = get_controllable_vars_bdds()
+    controls = set(get_controllable_vars_bdds())
 
     # build list with all variables
     all_vars = get_uncontrollable_vars_bdds()
     all_vars.extend(get_all_latches_as_bdds())
 
     for c in get_controllable_vars_bdds():
-        logger.info('getting output function for ' + aiger_is_input(spec, aiger_by_cudd[strip_lit(c.NodeReadIndex())]).name)
+        logger.info('getting output function for ' +
+                    aiger_is_input(spec, aiger_by_cudd[c.NodeReadIndex()]).name)
 
-        others = set(set(controls).difference({c}))
+        others = controls.difference({c})
         if others:
             others_cube = get_cube(others)
             c_arena = non_det_strategy_bdd.ExistAbstract(others_cube)  # type: DdNode
@@ -621,7 +622,8 @@ def walk(a_bdd):
 
 def model_to_aiger(c_bdd,     # type: DdNode
                    func_bdd,  # type: DdNode
-                   introduce_output):
+                   introduce_output,
+                   output_name):
     """ Update aiger spec with a definition of `c_bdd` """
 
     c_lit = aiger_by_cudd[c_bdd.NodeReadIndex()]
@@ -631,7 +633,7 @@ def model_to_aiger(c_bdd,     # type: DdNode
     aiger_redefine_input_as_and(spec, c_lit, func_as_aiger_lit, func_as_aiger_lit)
 
     if introduce_output:
-        aiger_add_output(spec, c_lit, '')
+        aiger_add_output(spec, c_lit, output_name)
 
 
 def init_cudd():
@@ -682,7 +684,9 @@ def main(aiger_file_name, out_file_name, output_full_circuit, realiz_check):
 
     if realizable:
         for (c_bdd, func_bdd) in func_by_var.items():
-            model_to_aiger(cudd.ReadVars(c_bdd), func_bdd, output_full_circuit)
+            c_var_name = aiger_is_input(spec, aiger_by_cudd[c_bdd])\
+                         .name
+            model_to_aiger(cudd.ReadVars(c_bdd), func_bdd, output_full_circuit, c_var_name)
 
         # some model checkers do not like unordered variable names (when e.g. latch is > add)
         # aiger_reencode(spec)
